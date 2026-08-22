@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS memory (
     metadata TEXT,
     embedding BLOB,
     dimensions INTEGER,
+    embed_model TEXT,
     created_at REAL NOT NULL,
     updated_at REAL NOT NULL,
     expires_at REAL,
@@ -84,6 +85,7 @@ class SQLiteContextStore(ContextStore):
             text=row["text"],
             metadata=json.loads(row["metadata"]) if row["metadata"] else {},
             embedding=_unpack(row["embedding"]) if with_embedding else None,
+            embed_model=row["embed_model"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
             expires_at=row["expires_at"],
@@ -109,14 +111,15 @@ class SQLiteContextStore(ContextStore):
                     """
                     INSERT INTO memory (
                         id, namespace, key, text, metadata, embedding, dimensions,
-                        created_at, updated_at, expires_at
-                    ) VALUES (?,?,?,?,?,?,?,?,?,?)
+                        embed_model, created_at, updated_at, expires_at
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
                     ON CONFLICT (namespace, id) DO UPDATE SET
                         key = excluded.key,
                         text = excluded.text,
                         metadata = excluded.metadata,
                         embedding = excluded.embedding,
                         dimensions = excluded.dimensions,
+                        embed_model = excluded.embed_model,
                         updated_at = excluded.updated_at,
                         expires_at = excluded.expires_at
                     """,
@@ -128,6 +131,7 @@ class SQLiteContextStore(ContextStore):
                         json.dumps(record.metadata) if record.metadata else None,
                         _pack(record.embedding),
                         len(record.embedding) if record.embedding else None,
+                        record.embed_model,
                         record.created_at,
                         record.updated_at,
                         record.expires_at,
@@ -192,10 +196,15 @@ class SQLiteContextStore(ContextStore):
         limit: int = 5,
         min_score: float = 0.0,
         metadata_filter: dict[str, Any] | None = None,
+        embed_model: str | None = None,
     ) -> list[SearchHit]:
         if not namespaces:
             return []
         placeholders = ",".join("?" * len(namespaces))
+        # Filtering on embed_model as well as dimensions matters: two models can
+        # share a dimensionality while producing incomparable vectors.
+        model_clause = "" if embed_model is None else "AND embed_model = ?"
+        model_params: tuple = () if embed_model is None else (embed_model,)
         async with self._lock:
             rows = self._conn.execute(
                 f"""
@@ -203,9 +212,10 @@ class SQLiteContextStore(ContextStore):
                 WHERE namespace IN ({placeholders})
                   AND embedding IS NOT NULL
                   AND dimensions = ?
+                  {model_clause}
                   AND (expires_at IS NULL OR expires_at > ?)
                 """,
-                (*namespaces, len(embedding), time.time()),
+                (*namespaces, len(embedding), *model_params, time.time()),
             ).fetchall()
 
         hits: list[SearchHit] = []

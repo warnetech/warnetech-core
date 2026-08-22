@@ -26,3 +26,5 @@ jobs:
         run: pytest -q
       - name: Quickstart runs offline
         run: python examples/quickstart.py
+      - name: AI controller integration runs offline
+        run: python examples/ai_controller_integration.py

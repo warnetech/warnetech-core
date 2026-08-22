@@ -68,9 +68,13 @@ class Settings:
     prompts_dir: str | None = None
     models_file: str | None = None
 
-    memory_backend: str = "sqlite"  # sqlite | memory | pgvector
+    memory_backend: str = "sqlite"  # sqlite | memory | pgvector | supabase
     memory_path: str = "./data/warnetech_memory.db"
     postgres_dsn: str | None = None
+    supabase_dsn: str | None = None
+    # Supabase is a shared live project, so the store never issues DDL there by
+    # default; apply migrations/0001_warnetech_memory.sql deliberately instead.
+    supabase_manage_schema: bool = False
     pgvector_table: str = "warnetech_memory"
     embed_model: str = "embed.default"
     embed_dimensions: int = 1536
@@ -109,6 +113,13 @@ class Settings:
             memory_backend=os.getenv("WARNETECH_MEMORY_BACKEND", "sqlite"),
             memory_path=os.getenv("WARNETECH_MEMORY_PATH", "./data/warnetech_memory.db"),
             postgres_dsn=os.getenv("WARNETECH_POSTGRES_DSN") or None,
+            supabase_dsn=(
+                os.getenv("WARNETECH_SUPABASE_DSN")
+                or os.getenv("SUPABASE_DB_URL")
+                or os.getenv("DATABASE_URL")
+                or None
+            ),
+            supabase_manage_schema=_env_bool("WARNETECH_SUPABASE_MANAGE_SCHEMA", False),
             pgvector_table=os.getenv("WARNETECH_PGVECTOR_TABLE", "warnetech_memory"),
             embed_model=os.getenv("WARNETECH_EMBED_MODEL", "embed.default"),
             embed_dimensions=int(os.getenv("WARNETECH_EMBED_DIMENSIONS", "1536")),
@@ -148,6 +159,15 @@ class Settings:
             return InMemoryContextStore()
         if self.memory_backend == "sqlite":
             return SQLiteContextStore(self.memory_path)
+        if self.memory_backend == "supabase":
+            from .memory.supabase import SupabaseVectorStore
+
+            return SupabaseVectorStore(
+                self.supabase_dsn,
+                table=self.pgvector_table,
+                dimensions=self.embed_dimensions,
+                manage_schema=self.supabase_manage_schema,
+            )
         if self.memory_backend == "pgvector":
             if not self.postgres_dsn:
                 raise ValueError(

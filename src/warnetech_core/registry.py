@@ -106,6 +106,18 @@ _BUILTIN: tuple[ModelSpec, ...] = (
         context_window=8_191,
         dimensions=3072,
     ),
+    # NVIDIA NIM. Nemotron is the model Warnetech's legacy worker already calls
+    # directly; registering it here is what brings that call under the gateway.
+    ModelSpec(
+        alias="nvidia.nemotron-3-ultra",
+        provider="nvidia",
+        provider_model="nvidia/nemotron-3-ultra",
+        input_cost_per_mtok=0.0,
+        output_cost_per_mtok=0.0,
+        context_window=128_000,
+        max_output_tokens=4_096,
+        tags=("nvidia", "nemotron"),
+    ),
     # Offline/deterministic models — used by tests and by local development so a
     # mini-project can run end-to-end with no API keys at all.
     ModelSpec(
@@ -131,6 +143,7 @@ _DEFAULT_ALIASES: dict[str, str] = {
     "chat.default": "anthropic.claude-sonnet-4-5",
     "chat.fast": "anthropic.claude-haiku-4-5",
     "chat.cheap": "openai.gpt-4o-mini",
+    "chat.nemotron": "nvidia.nemotron-3-ultra",
     "embed.default": "openai.text-embedding-3-small",
     "embed.large": "openai.text-embedding-3-large",
 }
@@ -143,6 +156,7 @@ OFFLINE_ALIASES: dict[str, str] = {
     "chat.default": "echo.chat",
     "chat.fast": "echo.chat",
     "chat.cheap": "echo.chat",
+    "chat.nemotron": "echo.chat",
     "embed.default": "hash.embed",
     "embed.large": "hash.embed",
 }
@@ -152,6 +166,7 @@ _DEFAULT_FALLBACKS: dict[str, tuple[str, ...]] = {
     "anthropic.claude-haiku-4-5": ("openai.gpt-4o-mini",),
     "openai.gpt-4o": ("anthropic.claude-sonnet-4-5",),
     "openai.gpt-4o-mini": ("anthropic.claude-haiku-4-5",),
+    "nvidia.nemotron-3-ultra": ("anthropic.claude-sonnet-4-5", "openai.gpt-4o"),
 }
 
 

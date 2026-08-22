@@ -16,6 +16,7 @@ __all__ = [
     "PgVectorContextStore",
     "SQLiteContextStore",
     "SearchHit",
+    "SupabaseVectorStore",
 ]
 
 
@@ -24,4 +25,8 @@ def __getattr__(name: str):  # pragma: no cover - optional dependency shim
         from .pgvector import PgVectorContextStore
 
         return PgVectorContextStore
+    if name == "SupabaseVectorStore":
+        from .supabase import SupabaseVectorStore
+
+        return SupabaseVectorStore
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

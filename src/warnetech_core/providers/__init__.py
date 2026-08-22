@@ -6,7 +6,7 @@ from __future__ import annotations
 from .base import Provider
 from .echo import EchoProvider
 
-__all__ = ["Provider", "EchoProvider", "AnthropicProvider", "OpenAIProvider"]
+__all__ = ["Provider", "EchoProvider", "AnthropicProvider", "OpenAIProvider", "NvidiaProvider"]
 
 
 def __getattr__(name: str):  # pragma: no cover - thin import shim
@@ -18,4 +18,8 @@ def __getattr__(name: str):  # pragma: no cover - thin import shim
         from .openai import OpenAIProvider
 
         return OpenAIProvider
+    if name == "NvidiaProvider":
+        from .nvidia import NvidiaProvider
+
+        return NvidiaProvider
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

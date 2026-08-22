@@ -30,6 +30,7 @@ from .errors import (
     WarnetechError,
 )
 from .gateway import AIGateway
+from .integrations import make_embed_fn
 from .memory import (
     ContextResult,
     ContextStore,
@@ -44,6 +45,7 @@ from .prompts import PromptRegistry, PromptTemplate
 from .providers import EchoProvider, Provider
 from .registry import ModelRegistry, ModelSpec
 from .resilience import RateLimiterRegistry, RetryPolicy, TokenBucket
+from .sync import SyncRunner
 from .types import (
     CompletionRequest,
     CompletionResponse,
@@ -97,6 +99,7 @@ __all__ = [
     "SQLiteUsageStore",
     "SearchHit",
     "Settings",
+    "SyncRunner",
     "TokenBucket",
     "TokenUsage",
     "UsageRecord",
@@ -105,4 +108,5 @@ __all__ = [
     "WarnetechError",
     "__version__",
     "build",
+    "make_embed_fn",
 ]

@@ -176,6 +176,7 @@ class MemoryService:
                     key=item.get("key"),
                     metadata=item.get("metadata") or {},
                     embedding=vector,
+                    embed_model=self.embed_model if vector is not None else None,
                     expires_at=now + ttl if ttl else None,
                 )
             )
@@ -234,6 +235,8 @@ class MemoryService:
             limit=limit,
             min_score=min_score,
             metadata_filter=metadata_filter,
+            # Never score this query's vector against one from another model.
+            embed_model=self.embed_model,
         )
 
     async def get_context(

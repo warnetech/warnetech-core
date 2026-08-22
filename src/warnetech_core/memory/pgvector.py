@@ -45,6 +45,7 @@ class PgVectorContextStore(ContextStore):
         dimensions: int = 1536,
         min_pool_size: int = 1,
         max_pool_size: int = 10,
+        manage_schema: bool = True,
     ) -> None:
         try:
             from psycopg_pool import AsyncConnectionPool
@@ -61,6 +62,10 @@ class PgVectorContextStore(ContextStore):
 
         self.table = table
         self.dimensions = dimensions
+        # When False the store never issues DDL — it verifies the table exists
+        # and otherwise fails with a pointer to the migration. Set this for any
+        # database you do not exclusively own (see SupabaseVectorStore).
+        self.manage_schema = manage_schema
         self._pool = AsyncConnectionPool(
             dsn, min_size=min_pool_size, max_size=max_pool_size, open=False
         )
@@ -71,6 +76,10 @@ class PgVectorContextStore(ContextStore):
             return
         if self._pool.closed:
             await self._pool.open()
+        if not self.manage_schema:
+            await self._verify_schema()
+            self._ready = True
+            return
         async with self._pool.connection() as conn:
             await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
             await conn.execute(
@@ -105,6 +114,25 @@ class PgVectorContextStore(ContextStore):
             )
         self._ready = True
 
+    async def _verify_schema(self) -> None:
+        """Check the table is present without creating anything.
+
+        Used when ``manage_schema`` is False. Silently running CREATE TABLE /
+        CREATE EXTENSION against a shared production database is how one
+        project's convenience becomes another's outage, so this reports what
+        is missing and names the migration instead.
+        """
+        async with self._pool.connection() as conn:
+            row = await (
+                await conn.execute("SELECT to_regclass(%s)", (f"public.{self.table}",))
+            ).fetchone()
+        if row is None or row[0] is None:
+            raise MemoryError_(
+                f"table public.{self.table} does not exist and manage_schema is False. "
+                f"Apply migrations/0001_warnetech_memory.sql to this database first "
+                f"(it is additive: CREATE TABLE IF NOT EXISTS, no ALTER, no DROP)."
+            )
+
     @staticmethod
     def _row_to_record(row: tuple[Any, ...]) -> MemoryRecord:
         metadata = row[4]
@@ -119,9 +147,12 @@ class PgVectorContextStore(ContextStore):
             created_at=row[5],
             updated_at=row[6],
             expires_at=row[7],
+            embed_model=row[8] if len(row) > 8 else None,
         )
 
-    _COLUMNS = "id, namespace, key, text, metadata, created_at, updated_at, expires_at"
+    _COLUMNS = (
+        "id, namespace, key, text, metadata, created_at, updated_at, expires_at, embed_model"
+    )
 
     async def upsert(self, records: Sequence[MemoryRecord]) -> list[MemoryRecord]:
         await self._ensure_schema()
@@ -148,13 +179,14 @@ class PgVectorContextStore(ContextStore):
                     f"""
                     INSERT INTO {self.table} (
                         id, namespace, key, text, metadata, embedding,
-                        created_at, updated_at, expires_at
-                    ) VALUES (%s,%s,%s,%s,%s::jsonb,%s::vector,%s,%s,%s)
+                        embed_model, created_at, updated_at, expires_at
+                    ) VALUES (%s,%s,%s,%s,%s::jsonb,%s::vector,%s,%s,%s,%s)
                     ON CONFLICT (namespace, id) DO UPDATE SET
                         key = EXCLUDED.key,
                         text = EXCLUDED.text,
                         metadata = EXCLUDED.metadata,
                         embedding = EXCLUDED.embedding,
+                        embed_model = EXCLUDED.embed_model,
                         updated_at = EXCLUDED.updated_at,
                         expires_at = EXCLUDED.expires_at
                     """,
@@ -165,6 +197,7 @@ class PgVectorContextStore(ContextStore):
                         record.text,
                         json.dumps(record.metadata or {}),
                         _to_vector_literal(record.embedding) if record.embedding else None,
+                        record.embed_model,
                         record.created_at,
                         record.updated_at,
                         record.expires_at,
@@ -200,6 +233,7 @@ class PgVectorContextStore(ContextStore):
         limit: int = 5,
         min_score: float = 0.0,
         metadata_filter: dict[str, Any] | None = None,
+        embed_model: str | None = None,
     ) -> list[SearchHit]:
         if not namespaces:
             return []
@@ -216,6 +250,7 @@ class PgVectorContextStore(ContextStore):
                     FROM {self.table}
                     WHERE namespace = ANY(%s)
                       AND embedding IS NOT NULL
+                      AND (%s::text IS NULL OR embed_model = %s)
                       AND (expires_at IS NULL OR expires_at > %s)
                       AND 1 - (embedding <=> %s::vector) >= %s
                     ORDER BY embedding <=> %s::vector
@@ -224,6 +259,8 @@ class PgVectorContextStore(ContextStore):
                     (
                         _to_vector_literal(embedding),
                         list(namespaces),
+                        embed_model,
+                        embed_model,
                         time.time(),
                         _to_vector_literal(embedding),
                         min_score,
@@ -238,7 +275,7 @@ class PgVectorContextStore(ContextStore):
             record = self._row_to_record(row)
             if not matches_metadata(record, metadata_filter):
                 continue
-            hits.append(SearchHit(record=record, score=float(row[8])))
+            hits.append(SearchHit(record=record, score=float(row[9])))
         return hits[:limit]
 
     async def list(

@@ -13,6 +13,10 @@ Two problems, solved once instead of per project:
 Import it in-process, or run it as an HTTP service when several separately
 deployed projects need one bill and one memory store. Same code path either way.
 
+Built to drop into the existing Warnetech architecture — see
+[`docs/WARNETECH-ALIGNMENT.md`](docs/WARNETECH-ALIGNMENT.md) for the canonical
+wiring decisions it honours and how it plugs into `warnetech_ai_controller`.
+
 ---
 
 ## Install
@@ -88,6 +92,12 @@ Adapters translate one request and raise. Retry, limits, cost and logging stay
 in the gateway, so they behave identically no matter who is upstream. Any
 OpenAI-compatible endpoint (Together, Groq, local vLLM) works through
 `OpenAIProvider(base_url=...)` with no new adapter.
+
+Built-in providers: **Anthropic**, **OpenAI**, **NVIDIA** (`chat.nemotron` →
+`nvidia/nemotron-3-ultra`, the model Warnetech's firewall already uses), and an
+offline `echo` provider. NVIDIA is OpenAI-compatible but registered under its
+own provider name, so a Nemotron burst cannot spend OpenAI's rate-limit or cost
+budget.
 
 ### Prompt registry
 
@@ -228,13 +238,36 @@ await memory.recall("hub", q, min_score=0.3)   # keep weak matches out of the pr
 | Backend | Use for | Setup |
 |---|---|---|
 | `InMemoryContextStore` | tests, short scripts | none |
-| `SQLiteContextStore` | **default** — real projects | none, a file |
-| `PgVectorContextStore` | production scale | Postgres + `vector` |
+| `SQLiteContextStore` | **default** for local work | none, a file |
+| `SupabaseVectorStore` | **production** — the shared project | migration + DSN |
+| `PgVectorContextStore` | any Postgres you own | Postgres + `vector` |
 
 ```bash
-WARNETECH_MEMORY_BACKEND=sqlite        # memory | sqlite | pgvector
+WARNETECH_MEMORY_BACKEND=sqlite        # memory | sqlite | supabase | pgvector
 WARNETECH_MEMORY_PATH=./data/warnetech_memory.db
 ```
+
+### Supabase (production)
+
+Warnetech's canonical wiring makes the existing Supabase project the single
+shared store. Apply the migration once, then point the backend at it:
+
+```bash
+psql "$WARNETECH_SUPABASE_DSN" -f migrations/0001_warnetech_memory.sql
+export WARNETECH_MEMORY_BACKEND=supabase
+export WARNETECH_SUPABASE_DSN=postgresql://postgres:...@db.<ref>.supabase.co:5432/postgres
+```
+
+The store **never issues DDL** against Supabase — `manage_schema` defaults to
+`False`, and a missing table raises pointing at the migration rather than
+silently creating one. That project holds other components' live data, and the
+migration is additive only (`CREATE … IF NOT EXISTS`, no `ALTER` beyond
+enabling RLS, no `DROP`); a test enforces it.
+
+Every record stores the `embed_model` that produced its vector, and searches
+filter on it. Swapping embedding models hides stale vectors rather than scoring
+this model's query against another model's vectors — which returns confident
+nonsense, not an error.
 
 SQLite stores vectors as float32 blobs and scores cosine similarity in Python:
 brute force over tens of thousands of records is milliseconds, with zero extra
@@ -248,11 +281,34 @@ against each store, so conformance is proven rather than assumed.
 
 ---
 
+## Using it from synchronous code
+
+Most of Warnetech is synchronous. `SyncRunner` bridges to the async gateway on
+one long-lived loop thread — not `asyncio.run` per call, which fails inside an
+existing loop and rebuilds the `httpx` connection pool every time:
+
+```python
+from warnetech_core import AIGateway
+from warnetech_core.integrations import make_embed_fn
+
+gateway = AIGateway.from_env()
+embed = make_embed_fn(gateway, project="warnetech-firewall")
+
+vector = embed("SQL injection attempt on /login")   # plain sync call
+```
+
+`make_embed_fn` returns exactly the `Callable[[str], list[float]]` that
+`warnetech_ai_controller.embeddings` takes as `embed_fn`, so that module gets
+real embeddings — with retry, fallback and cost attribution — without changing.
+Use `make_batch_embed_fn` for a slice set: one provider call for N texts.
+
 ## HTTP service (optional)
 
-For projects that live in the same process, import the gateway directly — same
-code path, no network hop. Run the service when separately deployed projects
-need one bill and one memory store:
+**In-process is the canonical path.** Warnetech's wiring specification calls
+for direct Python imports rather than an HTTP layer, so if everything runs in
+one process, import the gateway and skip this section. The service exists only
+for projects deployed separately that still need one bill and one memory store.
+It wraps the gateway, never the control plane:
 
 ```bash
 pip install -e ".[service]"
@@ -316,7 +372,7 @@ memory = MemoryService(gateway, SQLiteContextStore("memory.db"))
 
 ```bash
 pip install -e ".[dev,service]"
-pytest              # 186 tests, fully offline
+pytest              # 216 tests, fully offline
 ruff check src tests
 ```
 
@@ -335,15 +391,25 @@ src/warnetech_core/
   resilience.py   RetryPolicy, TokenBucket, rate limiter registry
   config.py       Settings.from_env(), build()
   cli.py          `warnetech` command
-  providers/      base, http, anthropic, openai, echo (offline)
+  sync.py         SyncRunner — async gateway from synchronous code
+  integrations/   make_embed_fn — warnetech_ai_controller bridge
+  providers/      base, http, anthropic, openai, nvidia, echo (offline)
   prompts/        PromptTemplate (versioned, strict), PromptRegistry
-  memory/         types, base, inmemory, sqlite, pgvector, service
+  memory/         types, base, inmemory, sqlite, pgvector, supabase, service
   service/        FastAPI app + schemas
 ```
 
 ## Status
 
-`0.1.0`. The pgvector store is written against psycopg3 and pgvector but has not
-yet been exercised against a live Postgres — the in-memory and SQLite stores are
-covered by the shared conformance suite. Model prices in the built-in catalogue
-drift; override them in `models.yaml` rather than trusting the table.
+`0.1.0`.
+
+- The pgvector and Supabase stores are written against psycopg3 and pgvector
+  but have **not been exercised against a live Postgres** — no database was
+  reachable from the environment they were built in. The in-memory and SQLite
+  stores are covered by the shared conformance suite. Treat the first
+  Supabase run as a smoke test.
+- `migrations/0001_warnetech_memory.sql` has not been applied anywhere yet.
+  Review it before running it against the shared project.
+- Model prices in the built-in catalogue drift, and the Nemotron entry is
+  priced at zero because NVIDIA's rates were not confirmed. Override them in
+  `models.yaml` rather than trusting the table.

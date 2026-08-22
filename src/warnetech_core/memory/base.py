@@ -43,6 +43,7 @@ class ContextStore(abc.ABC):
         limit: int = 5,
         min_score: float = 0.0,
         metadata_filter: dict[str, Any] | None = None,
+        embed_model: str | None = None,
     ) -> list[SearchHit]: ...
 
     @abc.abstractmethod

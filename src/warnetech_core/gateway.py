@@ -113,6 +113,10 @@ class AIGateway:
             from .providers.openai import OpenAIProvider
 
             providers["openai"] = OpenAIProvider()
+        if os.getenv("NVIDIA_API_KEY"):
+            from .providers.nvidia import NvidiaProvider
+
+            providers["nvidia"] = NvidiaProvider()
         if len(providers) == 1:
             log.warning(
                 "no provider API keys found; only the offline `echo` provider is available"

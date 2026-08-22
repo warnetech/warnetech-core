@@ -63,11 +63,14 @@ class InMemoryContextStore(ContextStore):
         limit: int = 5,
         min_score: float = 0.0,
         metadata_filter: dict[str, Any] | None = None,
+        embed_model: str | None = None,
     ) -> list[SearchHit]:
         hits: list[SearchHit] = []
         for namespace in namespaces:
             for record in self._live(namespace):
                 if record.embedding is None:
+                    continue
+                if embed_model is not None and record.embed_model != embed_model:
                     continue
                 if not matches_metadata(record, metadata_filter):
                     continue

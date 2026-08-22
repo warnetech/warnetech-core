@@ -76,6 +76,9 @@ class MemoryRecord:
     key: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     embedding: list[float] | None = None
+    # Registry alias that produced `embedding`. Vectors from different models
+    # are not comparable even at equal dimensionality, so searches filter on it.
+    embed_model: str | None = None
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
     expires_at: float | None = None
@@ -100,6 +103,7 @@ class MemoryRecord:
             "updated_at": self.updated_at,
             "expires_at": self.expires_at,
         }
+        data["embed_model"] = self.embed_model
         if include_embedding:
             data["embedding"] = self.embedding
         return data
