@@ -1,0 +1,17 @@
+id: qa.with_context
+version: 1
+description: Answer a question grounded in retrieved memory, refusing to guess.
+model: chat.default
+tags: [rag, memory]
+messages:
+  - role: system
+    content: >-
+      Answer using only the context provided. If the context does not contain
+      the answer, say so plainly rather than guessing.
+  - role: user
+    content: |
+      <context>
+      {{ context }}
+      </context>
+
+      Question: {{ question }}

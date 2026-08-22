@@ -1,0 +1,36 @@
+# Example prompt pack. Never edit a published version in place — add a new one
+# below it, so historical usage rows stay interpretable.
+- id: summarise.document
+  version: 1
+  description: Condense a document to a word budget.
+  model: chat.fast
+  tags: [summarisation]
+  messages:
+    - role: system
+      content: You are a precise summariser. Never invent facts.
+    - role: user
+      content: |
+        Summarise the document below in at most {{ max_words }} words.
+
+        <document>
+        {{ document }}
+        </document>
+
+- id: summarise.document
+  version: 2
+  description: v1 plus an explicit bullet format.
+  model: chat.fast
+  tags: [summarisation]
+  messages:
+    - role: system
+      content: >-
+        You are a precise summariser. Never invent facts. If the document does
+        not support a claim, omit it.
+    - role: user
+      content: |
+        Summarise the document below in at most {{ max_words }} words, as
+        bullet points ordered by importance.
+
+        <document>
+        {{ document }}
+        </document>

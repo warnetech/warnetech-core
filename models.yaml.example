@@ -1,0 +1,28 @@
+# Optional overrides for the built-in model catalogue.
+# Point WARNETECH_MODELS_FILE at a copy of this file.
+#
+# Two things you can do here:
+#   1. correct prices / limits on a built-in model (merged onto the builtin);
+#   2. define a model the catalogue does not know about.
+# Then repoint task aliases so downstream projects follow without a code change.
+
+models:
+  # Merge onto a built-in: only the named fields change.
+  - alias: anthropic.claude-sonnet-4-5
+    input_cost_per_mtok: 3.0
+    output_cost_per_mtok: 15.0
+
+  # A brand-new model needs provider + provider_model at minimum.
+  - alias: local.llama
+    provider: openai              # any OpenAI-compatible endpoint
+    provider_model: llama-3.3-70b
+    input_cost_per_mtok: 0.0
+    output_cost_per_mtok: 0.0
+    context_window: 128000
+    fallbacks: [anthropic.claude-haiku-4-5]
+    tags: [self-hosted]
+
+aliases:
+  # Every project calling `chat.fast` now hits the model named here.
+  chat.fast: anthropic.claude-haiku-4-5
+  chat.cheap: local.llama
