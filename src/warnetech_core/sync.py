@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import threading
 from collections.abc import Coroutine
+from concurrent.futures import TimeoutError as _FutureTimeout
 from typing import Any, TypeVar
 
 T = TypeVar("T")
@@ -67,12 +68,16 @@ class SyncRunner:
         future = asyncio.run_coroutine_threadsafe(coro, loop)
         try:
             return future.result(timeout)
-        except TimeoutError:
+        except _FutureTimeout as exc:
             # Without this the coroutine keeps running on the loop after the
             # caller has given up — a slow provider call would leak a task per
             # timeout. run_coroutine_threadsafe wires cancel() through to it.
             future.cancel()
-            raise
+            # concurrent.futures.TimeoutError only became an alias of the
+            # builtin TimeoutError in 3.11. Catch the futures class (so this
+            # branch runs on 3.10 too) but always raise the builtin, so callers
+            # can write `except TimeoutError` on every supported version.
+            raise TimeoutError(f"coroutine did not finish within {timeout}s") from exc
 
     def close(self) -> None:
         """Stop the loop thread. Further calls to :meth:`run` restart it."""
