@@ -260,6 +260,25 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "required": ["goal"],
         },
     },
+    {
+        "name": "warnetech_interpret",
+        "description": (
+            "Ask the local interpreter what code it would run for a plain-language task. "
+            "PROPOSE-ONLY: the code is returned for a person to review and is never "
+            "executed by this tool."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "task": {"type": "string", "description": "What to do, in plain language."},
+                "model": {
+                    "type": "string",
+                    "description": "Registry alias. Default 'chat.local'.",
+                },
+            },
+            "required": ["task"],
+        },
+    },
 ]
 
 
@@ -441,6 +460,32 @@ async def _run_goal(arguments: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+async def _interpret(arguments: dict[str, Any]) -> dict[str, Any]:
+    """Propose code for a task. Never executes: an MCP client has no way for a
+    person to approve each action, so this tool is dry-run by construction."""
+    import os
+
+    from warnetech_core.interpreter import Executor, Interpreter, Policy, Workspace
+
+    gateway, _memory = _ensure_built()
+    workspace = Workspace(os.getenv("WARNETECH_INTERPRETER_WORKSPACE") or "./workspace")
+    interpreter = Interpreter(
+        gateway,
+        Executor(workspace),
+        model=arguments.get("model", "chat.local"),
+        policy=Policy(mode="dry-run"),
+    )
+    report = await interpreter.run(arguments["task"])
+    proposal = report.steps[0].action if report.steps else None
+    return {
+        "executed": False,
+        "stopped": report.stopped,
+        "language": proposal.language if proposal else None,
+        "code": proposal.code if proposal else None,
+        "reply": report.final,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Dispatch table
 # ---------------------------------------------------------------------------
@@ -455,6 +500,7 @@ _HANDLERS: dict[str, Any] = {
     "warnetech_models": _models,
     "warnetech_usage": _usage,
     "warnetech_run_goal": _run_goal,
+    "warnetech_interpret": _interpret,
 }
 
 

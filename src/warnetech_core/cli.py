@@ -221,9 +221,15 @@ def main(argv: list[str] | None = None) -> int:
 
     ollama_group.mount(sub)
 
+    from .interpreter_commands import group as interpreter_group
+
+    interpreter_group.mount(sub)
+
     args = parser.parse_args(argv)
     if getattr(args, "command", None) == "ollama":
         return ollama_group.dispatch(args)
+    if getattr(args, "command", None) == "interpreter":
+        return interpreter_group.dispatch(args)
     return int(args.func(args))
 
 

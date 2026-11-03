@@ -31,6 +31,7 @@ responses to stdout.  Logs go to stderr.
 | `warnetech_models` | List available models with pricing |
 | `warnetech_usage` | Get usage summary (tokens, cost, requests) |
 | `warnetech_run_goal` | Run a goal through the AGI orchestrator |
+| `warnetech_interpret` | Propose code for a plain-language task (never executes it) |
 
 ### MCP client configuration
 

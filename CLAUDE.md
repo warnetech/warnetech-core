@@ -27,6 +27,8 @@ src/warnetech_core/
   memory/            types, base, inmemory, sqlite, pgvector, supabase, service
   service/           FastAPI app + schemas
   agi/               AGI capabilities — reasoning, planning, tools, reflection
+  interpreter/       Natural-language code execution: workspace, executor, approval, audit
+  runtime/           Host resource probe and the ollama CLI wrapper
 core/                Standalone engine bootstrap (warnetech.sh entry point)
 mcp-servers/         MCP server definitions for tool integration
 scripts/             Utility and bootstrap scripts

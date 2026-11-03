@@ -138,6 +138,11 @@ class AIGateway:
             providers["ollama"] = OllamaProvider()
         for name, base_url in parse_nodes(os.getenv("OLLAMA_NODES")).items():
             providers[name] = OllamaProvider(host=base_url.removesuffix("/v1"), name=name)
+        # LM Studio's local server is opt-in the same way: set LMSTUDIO_HOST.
+        if os.getenv("LMSTUDIO_HOST"):
+            from .providers.lmstudio import LMStudioProvider
+
+            providers["lmstudio"] = LMStudioProvider()
         if len(providers) == 1:
             log.warning("no provider API keys found; only the offline `echo` provider is available")
         return cls(providers, **kwargs)
