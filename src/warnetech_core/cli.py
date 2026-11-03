@@ -19,14 +19,10 @@ from .config import Settings, build
 def _table(rows: list[dict[str, Any]], columns: list[str]) -> str:
     if not rows:
         return "(no rows)"
-    widths = {
-        c: max(len(c), *(len(str(r.get(c, ""))) for r in rows)) for c in columns
-    }
+    widths = {c: max(len(c), *(len(str(r.get(c, ""))) for r in rows)) for c in columns}
     header = "  ".join(c.ljust(widths[c]) for c in columns)
     rule = "  ".join("-" * widths[c] for c in columns)
-    body = "\n".join(
-        "  ".join(str(r.get(c, "")).ljust(widths[c]) for c in columns) for r in rows
-    )
+    body = "\n".join("  ".join(str(r.get(c, "")).ljust(widths[c]) for c in columns) for r in rows)
     return f"{header}\n{rule}\n{body}"
 
 
@@ -34,37 +30,50 @@ def cmd_models(args: argparse.Namespace) -> int:
     settings = Settings.from_env()
     registry = settings.build_registry()
     if args.json:
-        print(json.dumps({
-            "aliases": registry.aliases(),
-            "models": [
-                {"alias": s.alias, "provider": s.provider, "provider_model": s.provider_model}
-                for s in registry.specs()
-            ],
-        }, indent=2))
+        print(
+            json.dumps(
+                {
+                    "aliases": registry.aliases(),
+                    "models": [
+                        {
+                            "alias": s.alias,
+                            "provider": s.provider,
+                            "provider_model": s.provider_model,
+                        }
+                        for s in registry.specs()
+                    ],
+                },
+                indent=2,
+            )
+        )
         return 0
     print("Task aliases")
-    print(_table(
-        [
-            {"alias": k, "resolves to": registry.resolve(k).alias}
-            for k in sorted(registry.aliases())
-        ],
-        ["alias", "resolves to"],
-    ))
+    print(
+        _table(
+            [
+                {"alias": k, "resolves to": registry.resolve(k).alias}
+                for k in sorted(registry.aliases())
+            ],
+            ["alias", "resolves to"],
+        )
+    )
     print("\nModels")
-    print(_table(
-        [
-            {
-                "alias": s.alias,
-                "provider": s.provider,
-                "model": s.provider_model,
-                "modality": s.modality,
-                "in $/Mtok": s.input_cost_per_mtok,
-                "out $/Mtok": s.output_cost_per_mtok,
-            }
-            for s in registry.specs()
-        ],
-        ["alias", "provider", "model", "modality", "in $/Mtok", "out $/Mtok"],
-    ))
+    print(
+        _table(
+            [
+                {
+                    "alias": s.alias,
+                    "provider": s.provider,
+                    "model": s.provider_model,
+                    "modality": s.modality,
+                    "in $/Mtok": s.input_cost_per_mtok,
+                    "out $/Mtok": s.output_cost_per_mtok,
+                }
+                for s in registry.specs()
+            ],
+            ["alias", "provider", "model", "modality", "in $/Mtok", "out $/Mtok"],
+        )
+    )
     return 0
 
 
@@ -78,19 +87,21 @@ def cmd_prompts(args: argparse.Namespace) -> int:
         template = prompts.get(args.id, args.version)
         print(json.dumps(template.to_dict(), indent=2))
         return 0
-    print(_table(
-        [
-            {
-                "id": t.id,
-                "version": t.version,
-                "model": t.model or "-",
-                "checksum": t.checksum,
-                "variables": ",".join(t.variables) or "-",
-            }
-            for t in sorted(prompts.all(), key=lambda t: (t.id, t.version))
-        ],
-        ["id", "version", "model", "checksum", "variables"],
-    ))
+    print(
+        _table(
+            [
+                {
+                    "id": t.id,
+                    "version": t.version,
+                    "model": t.model or "-",
+                    "checksum": t.checksum,
+                    "variables": ",".join(t.variables) or "-",
+                }
+                for t in sorted(prompts.all(), key=lambda t: (t.id, t.version))
+            ],
+            ["id", "version", "model", "checksum", "variables"],
+        )
+    )
     return 0
 
 
@@ -103,20 +114,22 @@ def cmd_usage(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(rows, indent=2))
         return 0
-    print(_table(
-        [
-            {
-                args.group_by: r["key"],
-                "calls": r["calls"],
-                "fail": r["failures"],
-                "tokens": r["total_tokens"],
-                "cost $": f"{r['cost_usd']:.6f}",
-                "avg ms": r["avg_latency_ms"],
-            }
-            for r in rows
-        ],
-        [args.group_by, "calls", "fail", "tokens", "cost $", "avg ms"],
-    ))
+    print(
+        _table(
+            [
+                {
+                    args.group_by: r["key"],
+                    "calls": r["calls"],
+                    "fail": r["failures"],
+                    "tokens": r["total_tokens"],
+                    "cost $": f"{r['cost_usd']:.6f}",
+                    "avg ms": r["avg_latency_ms"],
+                }
+                for r in rows
+            ],
+            [args.group_by, "calls", "fail", "tokens", "cost $", "avg ms"],
+        )
+    )
     print(f"\ntotal: ${sum(r['cost_usd'] for r in rows):.6f}")
     return 0
 
@@ -180,8 +193,11 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=cmd_prompts)
 
     p = sub.add_parser("usage", help="summarise token spend")
-    p.add_argument("--group-by", default="project",
-                   choices=["project", "team", "model_alias", "provider", "operation", "prompt_id"])
+    p.add_argument(
+        "--group-by",
+        default="project",
+        choices=["project", "team", "model_alias", "provider", "operation", "prompt_id"],
+    )
     p.add_argument("--project")
     p.add_argument("--hours", type=float, default=24.0, help="0 for all time")
     p.add_argument("--json", action="store_true")
@@ -200,7 +216,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--key")
     p.set_defaults(func=cmd_remember)
 
+    # Command groups built on cli_core (each command capped at 4 parameters).
+    from .ollama_commands import group as ollama_group
+
+    ollama_group.mount(sub)
+
     args = parser.parse_args(argv)
+    if getattr(args, "command", None) == "ollama":
+        return ollama_group.dispatch(args)
     return int(args.func(args))
 
 

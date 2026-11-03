@@ -117,10 +117,13 @@ class AIGateway:
             from .providers.nvidia import NvidiaProvider
 
             providers["nvidia"] = NvidiaProvider()
+        # Ollama needs no key, so it is opt-in: set OLLAMA_HOST to enable it.
+        if os.getenv("OLLAMA_HOST"):
+            from .providers.ollama import OllamaProvider
+
+            providers["ollama"] = OllamaProvider()
         if len(providers) == 1:
-            log.warning(
-                "no provider API keys found; only the offline `echo` provider is available"
-            )
+            log.warning("no provider API keys found; only the offline `echo` provider is available")
         return cls(providers, **kwargs)
 
     def register_provider(self, provider: Provider) -> None:
@@ -264,9 +267,7 @@ class AIGateway:
         # Drop candidates whose provider is not registered, or whose modality
         # does not match — a fallback we cannot call is not a fallback.
         usable = [
-            spec
-            for spec in chain
-            if spec.provider in self.providers and spec.modality == modality
+            spec for spec in chain if spec.provider in self.providers and spec.modality == modality
         ]
         if not usable:
             registered = ", ".join(sorted(self.providers)) or "none"
