@@ -6,7 +6,11 @@ import aiohttp
 logger = logging.getLogger("ProviderRouter")
 
 class ProviderRouter:
-    def __init__(self, default_provider: str = "local", local_endpoint: str = "http://127.0.0.1:8080/v1") -> None:
+    def __init__(
+        self,
+        default_provider: str = "local",
+        local_endpoint: str = "http://127.0.0.1:8080/v1",
+    ) -> None:
         self.default_provider = default_provider
         self.local_endpoint = local_endpoint
         self._session: aiohttp.ClientSession | None = None
@@ -17,29 +21,45 @@ class ProviderRouter:
             self._session = aiohttp.ClientSession()
         logger.info(f"ProviderRouter initialized with default provider: {self.default_provider}")
 
-    async def generate(self, prompt: str, system_prompt: str | None = None, max_tokens: int = 512, temperature: float = 0.7) -> str:
+    async def generate(
+        self,
+        prompt: str,
+        system_prompt: str | None = None,
+        max_tokens: int = 512,
+        temperature: float = 0.7,
+    ) -> str:
         """Route completion request to the active LLM backend."""
         if self.default_provider == "local":
             return await self._call_local_llama(prompt, system_prompt, max_tokens, temperature)
         else:
             raise NotImplementedError(f"Provider '{self.default_provider}' is not configured.")
 
-    async def _call_local_llama(self, prompt: str, system_prompt: str | None, max_tokens: int, temperature: float) -> str:
+    async def _call_local_llama(
+        self, prompt: str, system_prompt: str | None, max_tokens: int, temperature: float
+    ) -> str:
         if not self._session:
             await self.initialize()
 
         payload = {
-            "prompt": f"System: {system_prompt}\nUser: {prompt}\nAssistant:" if system_prompt else f"User: {prompt}\nAssistant:",
+            "prompt": (
+                f"System: {system_prompt}\nUser: {prompt}\nAssistant:"
+                if system_prompt
+                else f"User: {prompt}\nAssistant:"
+            ),
             "n_predict": max_tokens,
             "temperature": temperature,
             "cache_prompt": True
         }
 
         try:
-            async with self._session.post(f"{self.local_endpoint}/completion", json=payload) as response:
+            async with self._session.post(
+                f"{self.local_endpoint}/completion", json=payload
+            ) as response:
                 if response.status != 200:
                     text_err = await response.text()
-                    raise RuntimeError(f"Local LLM engine returned status {response.status}: {text_err}")
+                    raise RuntimeError(
+                        f"Local LLM engine returned status {response.status}: {text_err}"
+                    )
                 
                 data = await response.json()
                 return data.get("content", "").strip()

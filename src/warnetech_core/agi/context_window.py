@@ -71,7 +71,9 @@ class ContextWindow:
         ]
         
         final_prompt = "\n".join([p for p in assembled_parts if p])
-        logger.debug(f"Assembled prompt with estimated {self.estimate_tokens(final_prompt)} tokens.")
+        logger.debug(
+            f"Assembled prompt with estimated {self.estimate_tokens(final_prompt)} tokens."
+        )
         return final_prompt
 
 if __name__ == "__main__":
@@ -79,7 +81,10 @@ if __name__ == "__main__":
     cw = ContextWindow(max_tokens=1024)
     sys_p = "You are an advanced AGI core engine."
     rag = [{"content": "Temporal state machines drive deterministic executions."}]
-    history = [{"role": "user", "content": "What is the engine?"}, {"role": "assistant", "content": "It is a temporal engine."}]
+    history = [
+        {"role": "user", "content": "What is the engine?"},
+        {"role": "assistant", "content": "It is a temporal engine."},
+    ]
     query = "How does state transition?"
     
     prompt = cw.assemble_prompt(sys_p, rag, history, query)

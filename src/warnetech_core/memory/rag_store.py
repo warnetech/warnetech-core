@@ -18,7 +18,9 @@ class RAGStore:
         if not self.index_file.exists():
             self.index_file.touch()
         await self._load_cache()
-        logger.info(f"RAGStore initialized with {len(self._cache)} items loaded from {self.storage_dir}")
+        logger.info(
+            f"RAGStore initialized with {len(self._cache)} items loaded from {self.storage_dir}"
+        )
 
     async def _load_cache(self) -> None:
         """Reads flat-file index storage asynchronously."""
@@ -40,7 +42,9 @@ class RAGStore:
 
         self._cache = await loop.run_in_executor(None, _read_file)
 
-    async def add_document(self, doc_id: str, content: str, metadata: dict[str, Any] | None = None) -> None:
+    async def add_document(
+        self, doc_id: str, content: str, metadata: dict[str, Any] | None = None
+    ) -> None:
         """Persists a new document fragment to the flat-file store."""
         entry = {
             "id": doc_id,
@@ -86,7 +90,10 @@ if __name__ == "__main__":
     async def test():
         store = RAGStore("./test_rag_data")
         await store.initialize()
-        await store.add_document("doc_1", "The temporal engine coordinates state transitions across distributed nodes.")
+        await store.add_document(
+            "doc_1",
+            "The temporal engine coordinates state transitions across distributed nodes.",
+        )
         results = await store.retrieve("temporal engine")
         print("Retrieval test results:", results)
         
