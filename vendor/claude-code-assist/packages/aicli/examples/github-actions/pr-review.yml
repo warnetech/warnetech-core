@@ -1,0 +1,30 @@
+# Copy to .github/workflows/ in your repository.
+# Reviews each pull request's diff with one model and posts nothing: the
+# result is uploaded as an artifact and the cost shows in the job summary.
+name: aicli PR review
+on: pull_request
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: git diff "origin/${{ github.base_ref }}...HEAD" > "$RUNNER_TEMP/pr.diff"
+      - id: review
+        uses: warnetech/CLI-AI-Command-Center-PRD@main
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        with:
+          prompt-file: ${{ runner.temp }}/pr.diff
+          model: sonnet
+          extra-args: --system "Review this diff. Bugs first, then risks." --max-tokens 2000
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aicli-review
+          path: ${{ steps.review.outputs.result-file }}

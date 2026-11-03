@@ -1,0 +1,24 @@
+# A config for CI: cloud models only, cheapest-first routing, a hard daily ceiling.
+default_model = "haiku"
+fallback = ["sonnet"]
+max_tokens = 1500
+
+[providers.anthropic]
+type = "anthropic"
+api_key_env = "ANTHROPIC_API_KEY"
+
+[aliases]
+haiku = "anthropic/claude-haiku-4-5"
+sonnet = "anthropic/claude-sonnet-5"
+opus = "anthropic/claude-opus-5"
+
+[routing]
+pool = ["haiku", "sonnet", "opus"]
+
+[routing.quality]
+haiku = 3
+sonnet = 4
+opus = 5
+
+[budget]
+daily_usd = 2.00

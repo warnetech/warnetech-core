@@ -1,0 +1,28 @@
+# Monthly and grouped: one PR per ecosystem per month, not one per package per day.
+# Every package here has few or no runtime dependencies, so most of these PRs
+# are dev tooling and CI actions. Cheap to review, and they keep the build current.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: pip
+    directories: ["/packages/llmforge-python", "/packages/aicli"]
+    schedule:
+      interval: monthly
+    groups:
+      python-dev:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /packages/llmforge-typescript
+    schedule:
+      interval: monthly
+    groups:
+      npm-dev:
+        patterns: ["*"]
