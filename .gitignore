@@ -14,3 +14,10 @@ venv/
 htmlcov/
 *.db
 *.sqlite3
+
+# AGI / engine
+data/
+*.log
+
+# Clawness
+.clawness/
