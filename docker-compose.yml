@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  warnetech-core:
+    build: .
+    container_name: warnetech_core_service
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LLM_LOCAL_ENDPOINT=http://llama-server:8080/v1
+    depends_on:
+      - llama-server
+
+  llama-server:
+    image: ghcr.io/ggerganov/llama.cpp:server
+    container_name: warnetech_llama_server
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./models:/models
+    command: >
+      -m /models/model.gguf
+      --port 8080
+      --host 0.0.0.0
+      --ctx-size 4096
+      --n-gpu-layers 33
+
+volumes:
+  data:
+  models:
