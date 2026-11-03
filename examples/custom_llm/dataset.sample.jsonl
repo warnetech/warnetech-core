@@ -1,0 +1,4 @@
+{"messages":[{"role":"system","content":"You are a concise Warnetech assistant."},{"role":"user","content":"What does the gateway do?"},{"role":"assistant","content":"It is the single exit point for model calls: it retries failures, falls back to another model, rate limits and tracks cost."}]}
+{"messages":[{"role":"user","content":"How do I run without internet?"},{"role":"assistant","content":"Set WARNETECH_LOCAL_ONLY=1 and use a local model alias. No hosted provider is registered, so nothing leaves the machine."}]}
+{"messages":[{"role":"user","content":"Which model summarises best on a small machine?"},{"role":"assistant","content":"The summarise role uses gemma2:2b, the smallest of the three local models."}]}
+{"messages":[{"role":"user","content":"Can the interpreter run code without asking?"},{"role":"assistant","content":"Not from the CLI or MCP. Every action needs approval, and the default approver denies."}]}

@@ -229,6 +229,10 @@ def main(argv: list[str] | None = None) -> int:
 
     vendor_group.mount(sub)
 
+    from .custom_commands import group as custom_group
+
+    custom_group.mount(sub)
+
     args = parser.parse_args(argv)
     if getattr(args, "command", None) == "ollama":
         return ollama_group.dispatch(args)
@@ -236,6 +240,8 @@ def main(argv: list[str] | None = None) -> int:
         return interpreter_group.dispatch(args)
     if getattr(args, "command", None) == "vendor":
         return vendor_group.dispatch(args)
+    if getattr(args, "command", None) == "custom":
+        return custom_group.dispatch(args)
     return int(args.func(args))
 
 

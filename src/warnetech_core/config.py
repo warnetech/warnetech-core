@@ -69,6 +69,8 @@ class Settings:
     models_file: str | None = None
     # Local Ollama catalogue (config/local_models.yaml). Loaded after models_file.
     local_models_file: str | None = None
+    # Directory of custom model specs (config/custom_models). Each becomes an alias.
+    custom_models_dir: str | None = None
     # Refuse every hosted provider: nothing leaves the machine, no tokens spent.
     local_only: bool = False
 
@@ -115,6 +117,7 @@ class Settings:
             prompts_dir=os.getenv("WARNETECH_PROMPTS_DIR") or None,
             models_file=os.getenv("WARNETECH_MODELS_FILE") or None,
             local_models_file=os.getenv("WARNETECH_LOCAL_MODELS") or None,
+            custom_models_dir=os.getenv("WARNETECH_CUSTOM_MODELS_DIR") or None,
             local_only=_env_bool("WARNETECH_LOCAL_ONLY", False),
             memory_backend=os.getenv("WARNETECH_MEMORY_BACKEND", "sqlite"),
             memory_path=os.getenv("WARNETECH_MEMORY_PATH", "./data/warnetech_memory.db"),
@@ -195,6 +198,10 @@ class Settings:
             registry.load_yaml(self.models_file)
         if self.local_models_file:
             registry.load_yaml(self.local_models_file)
+        if self.custom_models_dir:
+            from .custom import register_custom_models
+
+            register_custom_models(registry, self.custom_models_dir)
         return registry
 
     def build_prompts(self) -> PromptRegistry:

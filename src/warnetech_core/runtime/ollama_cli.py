@@ -124,3 +124,10 @@ class OllamaCLI:
 
     def show(self, name: str) -> str:
         return self._exec(["show", validate_model_name(name)])
+
+    def create(self, name: str, modelfile: str) -> None:
+        """Create a model from a Modelfile path (``ollama create NAME -f FILE``)."""
+        self._exec(
+            ["create", validate_model_name(name), "-f", modelfile],
+            timeout=self._pull_timeout,
+        )

@@ -1,0 +1,12 @@
+name: warnetech-instruct
+alias: custom.instruct
+base: mistral:7b
+description: Follows instructions exactly and returns structured output.
+system: |
+  You follow instructions exactly. When asked for JSON, reply with only valid
+  JSON and no commentary. When asked a yes/no question, answer yes or no first.
+  If the request is ambiguous, ask one short clarifying question.
+parameters:
+  temperature: 0.1
+  top_p: 0.9
+  num_ctx: 8192

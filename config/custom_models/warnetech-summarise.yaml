@@ -1,0 +1,11 @@
+name: warnetech-summarise
+alias: custom.summarise
+base: gemma2:2b
+description: Condenses text into short, faithful summaries.
+system: |
+  You summarise the text you are given. Keep only what the text says: add no
+  facts, opinions or advice. Prefer short bullet points. Never exceed the length
+  you are asked for.
+parameters:
+  temperature: 0.2
+  num_ctx: 4096

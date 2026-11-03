@@ -1,0 +1,21 @@
+# Offline checks for the custom models. They catch regressions in behaviour that
+# the system prompts are meant to guarantee; they do not measure overall quality.
+cases:
+  - id: admits-uncertainty
+    prompt: "What is the exact path of the config file in a project you have never seen?"
+    expect:
+      not_contains: ["/etc/", "C:\\"]
+      max_chars: 600
+  - id: json-only
+    prompt: 'Reply with only JSON: an object with the key "ok" set to true.'
+    expect:
+      regex: '^\s*\{\s*"ok"\s*:\s*true\s*\}\s*$'
+  - id: yes-first
+    prompt: "Is 7 a prime number? Answer yes or no first."
+    expect:
+      regex: '^\s*(?i:yes)'
+  - id: short-summary
+    prompt: "Summarise in one sentence: The warnetech gateway routes model calls, retries failures and tracks cost."
+    expect:
+      contains: ["gateway"]
+      max_chars: 300
