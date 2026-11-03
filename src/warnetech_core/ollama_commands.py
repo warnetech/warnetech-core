@@ -10,6 +10,7 @@ Commands:
 
 from __future__ import annotations
 
+import os
 import sys
 from collections.abc import Mapping
 from typing import Any
@@ -17,6 +18,10 @@ from typing import Any
 from .cli_core import Command, CommandGroup, Param
 from .errors import ConfigError
 from .runtime import OllamaCLI, Resources, probe_resources, recommend_model
+from .runtime.local_models import load_catalogue, resolve_install_target
+from .runtime.local_models import plan as plan_fit
+
+DEFAULT_CATALOGUE = "config/local_models.yaml"
 
 group = CommandGroup("ollama", "local models via the Ollama command-line tool")
 
@@ -107,3 +112,49 @@ group.register(
     )
 )
 group.register(Command("recommend", "largest installed model that fits", handle_recommend))
+
+
+def _catalogue_path() -> str:
+    return os.getenv("WARNETECH_LOCAL_MODELS") or DEFAULT_CATALOGUE
+
+
+def handle_plan(values: Mapping[str, Any]) -> int:
+    path = _catalogue_path()
+    try:
+        catalogue = load_catalogue(path)
+    except OSError as exc:
+        _emit(f"cannot read catalogue {path}: {exc}")
+        return 1
+    rows = plan_fit(catalogue, probe_resources())
+    _emit(f"{'ROLE':<12} {'MODEL':<18} {'~SIZE':>8}  FITS  FOR")
+    for row in rows:
+        m = row.model
+        _emit(
+            f"{m.name:<12} {m.model:<18} {m.approx_gb:>6.1f} GB  "
+            f"{'yes' if row.fits else 'no ':<4}  {m.role}"
+        )
+    return 0
+
+
+def handle_install(values: Mapping[str, Any]) -> int:
+    target = str(values["target"])
+    path = _catalogue_path()
+    try:
+        catalogue = load_catalogue(path)
+    except OSError:
+        catalogue = []  # no catalogue: a raw tag is still accepted
+    tag = resolve_install_target(catalogue, target)
+    _cli(values).pull(tag)
+    _emit(f"installed {tag}  (role: {target})" if tag != target else f"installed {tag}")
+    return 0
+
+
+group.register(Command("plan", "local models: role, size and whether each fits", handle_plan))
+group.register(
+    Command(
+        "install",
+        "install a local model by role (general, instruction, summarise) or raw tag",
+        handle_install,
+        (Param("target", help="role name or Ollama tag"),),
+    )
+)

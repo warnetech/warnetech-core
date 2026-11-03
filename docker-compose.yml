@@ -31,6 +31,23 @@ services:
       --ctx-size 4096
       --n-gpu-layers 33
 
+  # Local model runtime. Models persist in the `ollama-models` volume, so they
+  # are downloaded once and never need the internet again.
+  ollama:
+    image: ollama/ollama:latest
+    container_name: warnetech_ollama
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
 volumes:
   data:
   models:
+  ollama-models:

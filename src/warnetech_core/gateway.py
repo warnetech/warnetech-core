@@ -43,6 +43,10 @@ from .usage import UsageRecord, UsageTracker
 log = logging.getLogger("warnetech.gateway")
 
 
+def _truthy(value: str | None) -> bool:
+    return (value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 class AIGateway:
     """Single entry point for model calls.
 
@@ -105,23 +109,35 @@ class AIGateway:
         from .providers.echo import EchoProvider
 
         providers: dict[str, Provider] = {"echo": EchoProvider()}
-        if os.getenv("ANTHROPIC_API_KEY"):
-            from .providers.anthropic import AnthropicProvider
 
-            providers["anthropic"] = AnthropicProvider()
-        if os.getenv("OPENAI_API_KEY"):
-            from .providers.openai import OpenAIProvider
+        # Local-only mode: no hosted provider is registered, so no request can
+        # leave the machine or spend tokens. Set by the constructor argument or
+        # WARNETECH_LOCAL_ONLY=1.
+        local_only = bool(kwargs.pop("local_only", False)) or _truthy(
+            os.getenv("WARNETECH_LOCAL_ONLY")
+        )
+        if not local_only:
+            if os.getenv("ANTHROPIC_API_KEY"):
+                from .providers.anthropic import AnthropicProvider
 
-            providers["openai"] = OpenAIProvider()
-        if os.getenv("NVIDIA_API_KEY"):
-            from .providers.nvidia import NvidiaProvider
+                providers["anthropic"] = AnthropicProvider()
+            if os.getenv("OPENAI_API_KEY"):
+                from .providers.openai import OpenAIProvider
 
-            providers["nvidia"] = NvidiaProvider()
-        # Ollama needs no key, so it is opt-in: set OLLAMA_HOST to enable it.
+                providers["openai"] = OpenAIProvider()
+            if os.getenv("NVIDIA_API_KEY"):
+                from .providers.nvidia import NvidiaProvider
+
+                providers["nvidia"] = NvidiaProvider()
+
+        # Ollama needs no key, so it is opt-in: OLLAMA_HOST for this machine,
+        # OLLAMA_NODES for named machines on the network. Both work in local-only mode.
+        from .providers.ollama import OllamaProvider, parse_nodes
+
         if os.getenv("OLLAMA_HOST"):
-            from .providers.ollama import OllamaProvider
-
             providers["ollama"] = OllamaProvider()
+        for name, base_url in parse_nodes(os.getenv("OLLAMA_NODES")).items():
+            providers[name] = OllamaProvider(host=base_url.removesuffix("/v1"), name=name)
         if len(providers) == 1:
             log.warning("no provider API keys found; only the offline `echo` provider is available")
         return cls(providers, **kwargs)
