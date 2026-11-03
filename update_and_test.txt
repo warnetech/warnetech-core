@@ -1,0 +1,2 @@
+chmod +x update_and_test.sh
+./update_and_test.sh
