@@ -1,0 +1,18 @@
+{
+  "claude-code-assist": {
+    "path": "vendor/claude-code-assist",
+    "url": "https://github.com/warnetech/claude-code-assist",
+    "ref": "claude/llm-integration-repo-1aicun",
+    "commit": "5e19707ccfc3e7ca58b28ebaff756abd6e408aec",
+    "license": "MIT",
+    "provides": "llmforge (Python and TypeScript), aicli multi-model CLI, assurance gates, labs"
+  },
+  "cli-ai-command-center-prd": {
+    "path": "vendor/cli-ai-command-center-prd",
+    "url": "https://github.com/warnetech/CLI-AI-Command-Center-PRD",
+    "ref": "main",
+    "commit": "7d2986126ad3df63ca79bf5dc51aaf91395bd3dd",
+    "license": "none declared",
+    "provides": "the product requirements document that aicli is built from"
+  }
+}

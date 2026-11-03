@@ -225,11 +225,17 @@ def main(argv: list[str] | None = None) -> int:
 
     interpreter_group.mount(sub)
 
+    from .vendor_commands import group as vendor_group
+
+    vendor_group.mount(sub)
+
     args = parser.parse_args(argv)
     if getattr(args, "command", None) == "ollama":
         return ollama_group.dispatch(args)
     if getattr(args, "command", None) == "interpreter":
         return interpreter_group.dispatch(args)
+    if getattr(args, "command", None) == "vendor":
+        return vendor_group.dispatch(args)
     return int(args.func(args))
 
 

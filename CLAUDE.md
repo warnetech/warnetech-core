@@ -32,6 +32,7 @@ src/warnetech_core/
 core/                Standalone engine bootstrap (warnetech.sh entry point)
 mcp-servers/         MCP server definitions for tool integration
 scripts/             Utility and bootstrap scripts
+vendor/              Bundled repos (claude-code-assist, CLI-AI-Command-Center-PRD) as git subtrees
 ```
 
 ## Commands
