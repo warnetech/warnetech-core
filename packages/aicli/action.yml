@@ -1,0 +1,85 @@
+name: aicli
+description: Run a prompt, a template or a JSONL batch through aicli (any model, cost-tracked) in CI.
+branding:
+  icon: terminal
+  color: blue
+
+inputs:
+  prompt:
+    description: Prompt text. Ignored when batch-file is set.
+    required: false
+  prompt-file:
+    description: File whose contents are the prompt (e.g. a diff written by an earlier step).
+    required: false
+  batch-file:
+    description: JSONL or one-prompt-per-line file to run as a batch.
+    required: false
+  model:
+    description: provider/model or alias, e.g. sonnet or anthropic/claude-opus-5.
+    required: false
+    default: sonnet
+  template:
+    description: Template name from the repository's .aicli/templates.
+    required: false
+  config:
+    description: Path to an aicli config.toml to use (defaults to the built-in one).
+    required: false
+  extra-args:
+    description: Extra flags, e.g. "--max-tokens 2000 --route cheapest".
+    required: false
+  python-version:
+    description: Python used to run aicli.
+    required: false
+    default: "3.12"
+
+outputs:
+  result-file:
+    description: JSON (single prompt) or JSONL (batch) file with text, tokens and cost.
+    value: ${{ steps.run.outputs.result-file }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+    - name: Install aicli
+      shell: bash
+      run: pip install --quiet "${{ github.action_path }}"
+    - name: Run
+      id: run
+      shell: bash
+      # Inputs are passed through the environment, never interpolated into the
+      # script, so a prompt cannot inject shell commands.
+      env:
+        AICLI_HOME: ${{ runner.temp }}/aicli
+        IN_PROMPT: ${{ inputs.prompt }}
+        IN_PROMPT_FILE: ${{ inputs.prompt-file }}
+        IN_BATCH: ${{ inputs.batch-file }}
+        IN_MODEL: ${{ inputs.model }}
+        IN_TEMPLATE: ${{ inputs.template }}
+        IN_CONFIG: ${{ inputs.config }}
+        IN_EXTRA: ${{ inputs.extra-args }}
+      run: |
+        set -euo pipefail
+        mkdir -p "$AICLI_HOME"
+        if [ -n "$IN_CONFIG" ]; then cp "$IN_CONFIG" "$AICLI_HOME/config.toml"; fi
+        # A trusted repo checkout may carry .aicli.toml + templates.
+        if [ -f .aicli.toml ]; then aicli project trust >/dev/null; fi
+        args=(-m "$IN_MODEL")
+        if [ -n "$IN_TEMPLATE" ]; then args+=(-t "$IN_TEMPLATE"); fi
+        # shellcheck disable=SC2206
+        extra=($IN_EXTRA)
+        if [ -n "$IN_BATCH" ]; then
+          out="$RUNNER_TEMP/aicli-results.jsonl"
+          aicli batch "$IN_BATCH" "${args[@]}" "${extra[@]}" -o "$out"
+        else
+          out="$RUNNER_TEMP/aicli-result.json"
+          if [ -n "$IN_PROMPT_FILE" ]; then
+            aicli run - "${args[@]}" "${extra[@]}" -f json < "$IN_PROMPT_FILE" > "$out"
+          else
+            aicli run "$IN_PROMPT" "${args[@]}" "${extra[@]}" -f json > "$out"
+          fi
+        fi
+        echo "result-file=$out" >> "$GITHUB_OUTPUT"
+        aicli stats >> "$GITHUB_STEP_SUMMARY" || true

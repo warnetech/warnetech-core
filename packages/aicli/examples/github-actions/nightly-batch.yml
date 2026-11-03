@@ -1,0 +1,30 @@
+# Copy to .github/workflows/ in your repository.
+# Runs a JSONL batch every night on the cheapest model in your routing pool,
+# with a hard spend ceiling.
+name: aicli nightly batch
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  batch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - id: batch
+        uses: warnetech/CLI-AI-Command-Center-PRD@main
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        with:
+          batch-file: prompts/nightly.jsonl
+          config: .github/aicli-ci.toml   # copy of examples/ci-config.toml
+          extra-args: --route cheapest --min-quality 3 -j 8
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aicli-nightly
+          path: ${{ steps.batch.outputs.result-file }}

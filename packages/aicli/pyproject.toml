@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "aicli"
+version = "0.2.0"
+description = "One command, any model: a local-first CLI for Claude, OpenAI-compatible APIs and Ollama with routing, budgets, MCP tools, templates and an audit log."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "warnetech" }]
+keywords = ["llm", "cli", "ollama", "anthropic", "openai", "claude"]
+
+# Zero runtime dependencies on purpose: providers are called over
+# plain HTTP (urllib), config is TOML (tomllib), history is SQLite. Install is
+# instant, and the whole test suite runs offline. See docs/decisions.md.
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[project.scripts]
+aicli = "aicli.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/aicli"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]

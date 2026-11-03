@@ -1,0 +1,61 @@
+name: CI
+
+# PRs and main only: a branch with an open PR no longer runs twice.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - run: pip install -e ".[dev]"
+      - run: ruff check src tests
+      # No credentials: the suite must pass offline.
+      - run: pytest -q
+
+  # Runs this repository's own action.yml end to end, offline, so the action
+  # cannot rot without CI noticing.
+  action:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          printf 'default_model = "echo/echo"\n[providers.echo]\ntype = "fake"\n' > "$RUNNER_TEMP/echo.toml"
+          printf '{"prompt": "one"}\ntwo\n' > "$RUNNER_TEMP/batch.jsonl"
+      - id: single
+        uses: ./
+        with:
+          prompt: hello from CI
+          model: echo/echo
+          config: ${{ runner.temp }}/echo.toml
+      - id: batch
+        uses: ./
+        with:
+          batch-file: ${{ runner.temp }}/batch.jsonl
+          model: echo/echo
+          config: ${{ runner.temp }}/echo.toml
+      - run: |
+          grep -q '"text": "echo: hello from CI"' "${{ steps.single.outputs.result-file }}"
+          test "$(wc -l < "${{ steps.batch.outputs.result-file }}")" -eq 2

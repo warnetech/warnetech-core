@@ -1,0 +1,14 @@
+# Paste into ~/.aicli/config.toml (or a trusted .aicli.toml).
+# Then: aicli mcp tools files
+#       aicli "What is in README.md?" --mcp files -m sonnet
+
+[mcp.servers.files]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-filesystem", "."]
+# Deny by default: only these tools are offered to the model.
+allow = ["read_text_file", "list_directory", "search_files"]
+
+[mcp.servers.git]
+command = "uvx"
+args = ["mcp-server-git", "--repository", "."]
+allow = ["git_status", "git_log", "git_diff_unstaged"]
