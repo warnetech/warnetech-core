@@ -44,3 +44,9 @@ select = ["E", "F", "I", "UP", "B"]
 [tool.ruff.lint.per-file-ignores]
 # `Depends(...)` in argument defaults is the FastAPI idiom, not a mutable default.
 "src/warnetech_core/service/app.py" = ["B008"]
+
+[tool.codeflash]
+module-root = "src/warnetech_core"
+tests-root = "tests"
+ignore-paths = ["dist", "**/node_modules", "**/__tests__"]
+formatter-cmds = ["disabled"]
