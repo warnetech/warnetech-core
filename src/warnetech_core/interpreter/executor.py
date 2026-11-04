@@ -35,6 +35,8 @@ except ImportError:  # pragma: no cover
     resource = None  # type: ignore[assignment]
 
 MAX_CODE_CHARS = 50_000
+# Windows caps a whole command line at about 32,767 characters and the code is passed on it.
+WINDOWS_MAX_CODE_CHARS = 30_000
 _IS_WINDOWS = sys.platform == "win32"
 # Not defined by subprocess on POSIX; the documented value of the Windows constant.
 _CREATE_NEW_PROCESS_GROUP = 0x00000200
@@ -124,22 +126,25 @@ class Executor:
     def run(self, language: str, code: str) -> ExecResult:
         if language not in self.allowed_languages:
             raise ExecutionRefused(f"language not allowed here: {language!r}")
-        if len(code) > MAX_CODE_CHARS:
-            raise ExecutionRefused(f"code is longer than {MAX_CODE_CHARS} characters")
+        if len(code) > self.max_code_chars:
+            raise ExecutionRefused(f"code is longer than {self.max_code_chars} characters")
         argv = self._argv(language, code)
 
         started = time.perf_counter()
         timed_out = False
         with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
-            proc = subprocess.Popen(  # noqa: S603 - argv is fixed by us, no shell
-                argv,
-                cwd=self.workspace.root,
-                env=self._env(),
-                stdin=subprocess.DEVNULL,
-                stdout=out,
-                stderr=err,
-                **self._popen_options(),
-            )
+            try:
+                proc = subprocess.Popen(  # noqa: S603 - argv is fixed by us, no shell
+                    argv,
+                    cwd=self.workspace.root,
+                    env=self._env(),
+                    stdin=subprocess.DEVNULL,
+                    stdout=out,
+                    stderr=err,
+                    **self._popen_options(),
+                )
+            except OSError as exc:
+                raise ExecutionRefused(f"could not start the process: {exc}") from exc
             try:
                 proc.wait(timeout=self.timeout)
             except subprocess.TimeoutExpired:
@@ -158,6 +163,11 @@ class Executor:
             truncated=out_cut or err_cut,
             duration_s=round(duration, 3),
         )
+
+    @property
+    def max_code_chars(self) -> int:
+        """The longest program accepted here; lower on Windows because of its command-line limit."""
+        return WINDOWS_MAX_CODE_CHARS if _IS_WINDOWS else MAX_CODE_CHARS
 
     def _popen_options(self) -> dict:
         """Platform-specific process-start options.

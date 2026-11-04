@@ -10,7 +10,7 @@ tricks, and adapter paths that leave the spec's directory are all rejected.
 from __future__ import annotations
 
 import re
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 import yaml
@@ -137,8 +137,12 @@ class CustomModel(BaseModel):
     def _check_adapter(cls, value: str | None) -> str | None:
         if value is None:
             return None
-        path = Path(value)
-        if path.is_absolute() or ".." in path.parts or "\x00" in value or "\n" in value:
+        # Check both path flavours on every OS: /etc/passwd is not absolute on Windows and
+        # ..\x is not traversal on POSIX, yet each escapes the directory on the other.
+        posix, windows = PurePosixPath(value), PureWindowsPath(value)
+        rooted = posix.is_absolute() or windows.is_absolute() or windows.anchor or windows.drive
+        traversal = ".." in posix.parts or ".." in windows.parts
+        if rooted or traversal or "\x00" in value or "\n" in value:
             raise ValueError("must be a relative path inside the spec's directory")
         return value
 

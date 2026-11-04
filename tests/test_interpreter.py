@@ -173,11 +173,13 @@ def test_unknown_language_is_refused(tmp_path):
 
 def test_oversized_code_is_refused(tmp_path):
     with pytest.raises(ExecutionRefused):
-        Executor(Workspace(tmp_path)).run("python", "#" * 50_001)
+        ex = Executor(Workspace(tmp_path))
+        ex.run("python", "#" * (ex.max_code_chars + 1))
 
 
 def test_code_at_the_size_limit_is_accepted(tmp_path):
-    result = Executor(Workspace(tmp_path)).run("python", "#" * 50_000)
+    ex = Executor(Workspace(tmp_path))
+    result = ex.run("python", "#" * ex.max_code_chars)
     assert result.ok
 
 
@@ -699,3 +701,26 @@ def test_windows_environment_keeps_what_python_needs_and_still_drops_secrets(
     assert env["SYSTEMROOT"] == "C:\\Windows"
     assert env["USERPROFILE"] == str(tmp_path.resolve())
     assert "FAKE_API_TOKEN" not in env
+
+
+def test_windows_accepts_less_code_because_of_its_command_line_limit(monkeypatch, tmp_path):
+    monkeypatch.setattr(executor_module, "_IS_WINDOWS", True)
+    ex = Executor(Workspace(tmp_path))
+    assert ex.max_code_chars == executor_module.WINDOWS_MAX_CODE_CHARS
+    assert executor_module.WINDOWS_MAX_CODE_CHARS < executor_module.MAX_CODE_CHARS
+    with pytest.raises(ExecutionRefused, match="longer than 30000"):
+        ex.run("python", "#" * (ex.max_code_chars + 1))  # refused before any process starts
+
+
+def test_posix_keeps_the_larger_code_limit(monkeypatch, tmp_path):
+    monkeypatch.setattr(executor_module, "_IS_WINDOWS", False)
+    assert Executor(Workspace(tmp_path)).max_code_chars == executor_module.MAX_CODE_CHARS
+
+
+def test_a_process_that_cannot_start_is_a_clean_refusal(monkeypatch, tmp_path):
+    def cannot_start(*args, **kwargs):
+        raise OSError("[WinError 206] The filename or extension is too long")
+
+    monkeypatch.setattr(subprocess, "Popen", cannot_start)
+    with pytest.raises(ExecutionRefused, match="could not start the process"):
+        Executor(Workspace(tmp_path)).run("python", "print(1)")
