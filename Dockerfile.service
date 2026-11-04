@@ -1,0 +1,32 @@
+# The warnetech HTTP service: gateway + memory over a REST API, for servers and devices.
+# Light on purpose (no torch, no model weights). Pure-Python wheels, so the same file
+# builds for linux/amd64 and linux/arm64:
+#   docker buildx build --platform linux/amd64,linux/arm64 -f Dockerfile.service .
+FROM python:3.12-slim AS build
+WORKDIR /src
+COPY pyproject.toml README.md ./
+COPY src ./src
+RUN pip install --no-cache-dir --prefix=/install ".[service]"
+
+FROM python:3.12-slim
+# Unprivileged user; /data is the only place the service writes.
+RUN useradd --create-home --uid 10001 app \
+    && mkdir /data \
+    && chown app:app /data
+COPY --from=build /install /usr/local
+WORKDIR /app
+COPY --chown=app:app config ./config
+USER app
+
+ENV PYTHONUNBUFFERED=1 \
+    WARNETECH_MEMORY_PATH=/data/warnetech_memory.db \
+    WARNETECH_USAGE_PATH=/data/warnetech_usage.db
+VOLUME ["/data"]
+EXPOSE 8080
+
+# /health needs no token, so orchestrators can probe it.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD ["python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8080/health', timeout=3)"]
+
+# Credentials and the API token come from the environment at run time, never from the image.
+CMD ["uvicorn", "warnetech_core.service.app:app", "--host", "0.0.0.0", "--port", "8080"]

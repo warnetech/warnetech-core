@@ -175,12 +175,14 @@ def _sync(*args):
     )
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="the sync script is a bash script")
 def test_sync_script_rejects_an_unknown_name_before_doing_anything():
     result = _sync("../../etc")
     assert result.returncode == 2
     assert "unknown vendored repository" in result.stderr
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="the sync script is a bash script")
 def test_sync_script_requires_a_name():
     assert _sync().returncode != 0
 

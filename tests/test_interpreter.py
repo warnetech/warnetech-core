@@ -8,6 +8,7 @@ The model is a scripted provider, so no model or network is involved.
 import argparse
 import json
 import os
+import subprocess
 import sys
 
 import pytest
@@ -29,6 +30,7 @@ from warnetech_core.interpreter import (
     prompt_approver,
     register_interpreter_tools,
 )
+from warnetech_core.interpreter import executor as executor_module
 from warnetech_core.interpreter_commands import group
 from warnetech_core.providers.base import Provider
 from warnetech_core.providers.lmstudio import DEFAULT_HOST, LMStudioProvider, lmstudio_base_url
@@ -54,6 +56,7 @@ def test_workspace_rejects_escapes_and_bad_paths(tmp_path, bad):
         Workspace(tmp_path).resolve(bad)
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only: bash and symlinks")
 def test_workspace_rejects_symlink_that_points_outside(tmp_path):
     outside = tmp_path / "outside"
     outside.mkdir()
@@ -155,6 +158,7 @@ def test_bash_is_refused_unless_allowed(tmp_path):
         Executor(Workspace(tmp_path)).run("bash", "echo hi")
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only: bash and symlinks")
 def test_bash_runs_when_allowed(tmp_path):
     ex = Executor(Workspace(tmp_path), allowed_languages=("python", "bash"))
     result = ex.run("bash", "echo hi")
@@ -169,11 +173,13 @@ def test_unknown_language_is_refused(tmp_path):
 
 def test_oversized_code_is_refused(tmp_path):
     with pytest.raises(ExecutionRefused):
-        Executor(Workspace(tmp_path)).run("python", "#" * 50_001)
+        ex = Executor(Workspace(tmp_path))
+        ex.run("python", "#" * (ex.max_code_chars + 1))
 
 
 def test_code_at_the_size_limit_is_accepted(tmp_path):
-    result = Executor(Workspace(tmp_path)).run("python", "#" * 50_000)
+    ex = Executor(Workspace(tmp_path))
+    result = ex.run("python", "#" * ex.max_code_chars)
     assert result.ok
 
 
@@ -627,3 +633,94 @@ async def test_mcp_interpret_is_propose_only(tmp_path, monkeypatch):
     content = json.loads(resp["result"]["content"][0]["text"])
     assert content["executed"] is False
     assert list(tmp_path.iterdir()) == []  # nothing was created
+
+
+# ---- Windows branches (selected by switching the platform flag) ---------
+
+def test_windows_starts_a_process_group_and_uses_no_posix_hooks(monkeypatch, tmp_path):
+    monkeypatch.setattr(executor_module, "_IS_WINDOWS", True)
+    options = Executor(Workspace(tmp_path))._popen_options()
+    assert options == {"creationflags": 0x00000200}
+
+
+def test_posix_starts_a_new_session(monkeypatch, tmp_path):
+    monkeypatch.setattr(executor_module, "_IS_WINDOWS", False)
+    options = Executor(Workspace(tmp_path))._popen_options()
+    assert options["start_new_session"] is True and "creationflags" not in options
+
+
+def test_windows_kill_ends_the_whole_process_tree(monkeypatch):
+    monkeypatch.setattr(executor_module, "_IS_WINDOWS", True)
+    ran, killed = [], []
+    monkeypatch.setattr(subprocess, "run", lambda argv, **kw: ran.append(argv))
+
+    class Child:
+        pid = 4242
+
+        def kill(self):
+            killed.append(True)
+
+    Executor._kill_group(Child())
+    assert ran == [["taskkill", "/PID", "4242", "/T", "/F"]]
+    assert killed == [True]
+
+
+def test_windows_kill_still_kills_the_child_when_taskkill_is_missing(monkeypatch):
+    monkeypatch.setattr(executor_module, "_IS_WINDOWS", True)
+
+    def missing(*args, **kwargs):
+        raise FileNotFoundError("taskkill")
+
+    monkeypatch.setattr(subprocess, "run", missing)
+    killed = []
+
+    class Child:
+        pid = 1
+
+        def kill(self):
+            killed.append(True)
+
+    Executor._kill_group(Child())
+    assert killed == [True]
+
+
+def test_bash_is_refused_on_windows(monkeypatch, tmp_path):
+    monkeypatch.setattr(executor_module, "_IS_WINDOWS", True)
+    ex = Executor(Workspace(tmp_path), allowed_languages=("python", "bash"))
+    with pytest.raises(ExecutionRefused, match="not supported on Windows"):
+        ex.run("bash", "echo hi")
+
+
+def test_windows_environment_keeps_what_python_needs_and_still_drops_secrets(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(executor_module, "_IS_WINDOWS", True)
+    monkeypatch.setenv("SYSTEMROOT", "C:\\Windows")
+    monkeypatch.setenv("FAKE_API_TOKEN", "should-not-leak")
+    env = Executor(Workspace(tmp_path))._env()
+    assert env["SYSTEMROOT"] == "C:\\Windows"
+    assert env["USERPROFILE"] == str(tmp_path.resolve())
+    assert "FAKE_API_TOKEN" not in env
+
+
+def test_windows_accepts_less_code_because_of_its_command_line_limit(monkeypatch, tmp_path):
+    monkeypatch.setattr(executor_module, "_IS_WINDOWS", True)
+    ex = Executor(Workspace(tmp_path))
+    assert ex.max_code_chars == executor_module.WINDOWS_MAX_CODE_CHARS
+    assert executor_module.WINDOWS_MAX_CODE_CHARS < executor_module.MAX_CODE_CHARS
+    with pytest.raises(ExecutionRefused, match="longer than 30000"):
+        ex.run("python", "#" * (ex.max_code_chars + 1))  # refused before any process starts
+
+
+def test_posix_keeps_the_larger_code_limit(monkeypatch, tmp_path):
+    monkeypatch.setattr(executor_module, "_IS_WINDOWS", False)
+    assert Executor(Workspace(tmp_path)).max_code_chars == executor_module.MAX_CODE_CHARS
+
+
+def test_a_process_that_cannot_start_is_a_clean_refusal(monkeypatch, tmp_path):
+    def cannot_start(*args, **kwargs):
+        raise OSError("[WinError 206] The filename or extension is too long")
+
+    monkeypatch.setattr(subprocess, "Popen", cannot_start)
+    with pytest.raises(ExecutionRefused, match="could not start the process"):
+        Executor(Workspace(tmp_path)).run("python", "print(1)")

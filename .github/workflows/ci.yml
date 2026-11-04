@@ -7,11 +7,20 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    # Windows is reported but does not block: the interpreter's resource limits and bash
+    # are POSIX-only, and this job exists to show what else differs. Linux and macOS block.
+    continue-on-error: ${{ matrix.os == 'windows-latest' }}
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest]
         python-version: ["3.10", "3.11", "3.12"]
+        include:
+          - os: macos-latest
+            python-version: "3.12"
+          - os: windows-latest
+            python-version: "3.12"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -22,6 +31,10 @@ jobs:
         run: pip install -e ".[dev,service]"
       - name: Lint
         run: ruff check src tests
+      - name: Environment report
+        run: warnetech doctor
+        env:
+          WARNETECH_OFFLINE: "1"
       - name: Test
         run: pytest -q
       - name: Quickstart runs offline

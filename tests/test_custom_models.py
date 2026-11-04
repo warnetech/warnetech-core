@@ -8,6 +8,7 @@ a scripted provider.
 import argparse
 import json
 import random
+import sys
 from pathlib import Path
 
 import pytest
@@ -153,7 +154,11 @@ def test_stop_count_boundary():
         make(stop=[f"s{i}" for i in range(9)])
 
 
-@pytest.mark.parametrize("adapter", ["/etc/passwd", "../x.gguf", "a/../../x", "a\nb"])
+@pytest.mark.parametrize("adapter", [
+    "/etc/passwd", "../x.gguf", "a/../../x", "a\nb",
+    "\\models\\x.gguf", "C:\\x.gguf", "C:x.gguf",
+    "..\\x.gguf", "a\\..\\..\\x", "\\\\server\\share\\x",
+])
 def test_adapter_must_stay_inside_the_spec_directory(adapter):
     with pytest.raises(ValueError, match="relative path"):
         make(adapter=adapter)
@@ -232,7 +237,7 @@ def test_modelfile_orders_directives_and_sorts_parameters():
     assert text.splitlines() == [
         "# demo",
         "FROM llama3.2:3b",
-        "ADAPTER /models/lora.gguf",
+        f"ADAPTER {Path('/models/lora.gguf')}",
         "PARAMETER num_ctx 4096",
         "PARAMETER temperature 0.2",
         'PARAMETER stop "END"',
@@ -281,6 +286,7 @@ def test_resolve_adapter_accepts_a_file_inside(tmp_path):
     )
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privileges on Windows")
 def test_resolve_adapter_rejects_a_symlink_that_leaves_the_directory(tmp_path):
     outside = tmp_path / "outside.gguf"
     outside.write_text("secret")
