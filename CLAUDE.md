@@ -27,7 +27,7 @@ src/warnetech_core/
   memory/            types, base, inmemory, sqlite, pgvector, supabase, service, ingest
   delegation/        Sub-agents (/delegate): YAML specs, runner with parallel/budget/no-nesting limits
   chat.py            Interactive chat: core memory + retrieved context + session history
-  service/           FastAPI app + schemas
+  service/           FastAPI app + schemas, signed webhooks, local web UI (warnetech_ui)
   agi/               AGI capabilities — reasoning, planning, tools, reflection
   interpreter/       Natural-language code execution: workspace, executor, approval, audit
   runtime/           Host resource probe, ollama CLI wrapper, `warnetech doctor`
