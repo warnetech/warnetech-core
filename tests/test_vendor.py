@@ -9,12 +9,14 @@ import argparse
 import json
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 from warnetech_core.errors import ConfigError
 from warnetech_core.integrations.vendor import (
+    AICLI_MIN_PYTHON,
     aicli_source,
     available,
     manifest,
@@ -118,12 +120,20 @@ def test_aicli_source_holds_the_package():
     assert (aicli_source() / "aicli").is_dir()
 
 
+needs_aicli_python = pytest.mark.skipif(
+    sys.version_info < AICLI_MIN_PYTHON,
+    reason="the bundled aicli requires Python 3.11+ (it imports tomllib)",
+)
+
+
+@needs_aicli_python
 def test_run_aicli_executes_the_vendored_cli():
     result = run_aicli(["--version"])
     assert result.returncode == 0
     assert "0.2" in (result.stdout + result.stderr)
 
 
+@needs_aicli_python
 def test_run_aicli_reports_failure_without_raising():
     result = run_aicli(["definitely-not-a-command"])
     assert result.returncode != 0
@@ -173,3 +183,18 @@ def test_sync_script_rejects_an_unknown_name_before_doing_anything():
 
 def test_sync_script_requires_a_name():
     assert _sync().returncode != 0
+
+
+def test_run_aicli_says_why_it_cannot_run_on_old_python(monkeypatch):
+    # Runs on every Python version: the guard must refuse before starting a process.
+    monkeypatch.setattr(sys, "version_info", (3, 10, 0, "final", 0))
+    with pytest.raises(ConfigError, match=r"needs Python 3\.11 or newer; this is 3\.10"):
+        run_aicli(["--version"])
+
+
+def test_run_aicli_guard_allows_the_minimum_version(monkeypatch):
+    monkeypatch.setattr(sys, "version_info", (*AICLI_MIN_PYTHON, 0, "final", 0))
+    started = []
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: started.append(a) or "ran")
+    assert run_aicli(["--version"]) == "ran"
+    assert started and started[0][0][1:3] == ["-m", "aicli"]

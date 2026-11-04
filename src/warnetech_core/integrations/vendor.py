@@ -20,6 +20,8 @@ from typing import Any
 from ..errors import ConfigError
 
 _MANIFEST_NAME = "vendor.json"
+# The bundled aicli declares requires-python >=3.11 (it imports tomllib).
+AICLI_MIN_PYTHON = (3, 11)
 # src/warnetech_core/integrations/vendor.py -> repository root is three levels up.
 _DEFAULT_ROOT = Path(__file__).resolve().parents[3]
 
@@ -84,7 +86,14 @@ def run_aicli(args: list[str], *, timeout: float = 120.0) -> subprocess.Complete
     aicli is a separate product with its own provider layer. It runs in a child
     process, so the parent environment (including any provider keys aicli reads)
     is passed through. Arguments are a list and no shell is used.
+
+    Raises :class:`ConfigError` on Python older than 3.11, which aicli does not support;
+    the rest of warnetech-core still runs on 3.10.
     """
+    if tuple(sys.version_info[:2]) < AICLI_MIN_PYTHON:
+        have = ".".join(str(n) for n in sys.version_info[:2])
+        need = ".".join(str(n) for n in AICLI_MIN_PYTHON)
+        raise ConfigError(f"the bundled aicli needs Python {need} or newer; this is {have}")
     env = dict(os.environ)
     existing = env.get("PYTHONPATH")
     env["PYTHONPATH"] = (

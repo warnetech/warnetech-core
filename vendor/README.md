@@ -23,7 +23,8 @@ From Python:
 
     result = run_aicli(["--version"])            # runs the bundled aicli in a child process
 
-`aicli` is a separate product with its own provider layer. It does not go through
+`aicli` needs Python 3.11 or newer (the rest of this repo runs on 3.10); on older Python
+`run_aicli` raises a clear error. It is a separate product with its own provider layer. It does not go through
 this repo's gateway, so its calls are not covered by the gateway's budgets or
 usage tracking. Run it with `WARNETECH_LOCAL_ONLY`-style discipline yourself if you
 need no-network behaviour.
