@@ -1,0 +1,52 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "llmforge"
+version = "0.1.0"
+description = "A frontier toolkit for wiring LLMs into real codebases: agent loops, context packing, guardrails, evals, and a lab of unproven-but-promising techniques."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "warnetech" }]
+keywords = ["llm", "anthropic", "claude", "agents", "evals", "codegen"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+]
+
+# Deliberately zero required runtime dependencies. The Anthropic SDK is imported
+# lazily inside AnthropicProvider so that the core, the eval harness, the labs
+# and the whole test suite run offline against FakeProvider.
+dependencies = []
+
+[project.optional-dependencies]
+anthropic = ["anthropic>=1.0.0"]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[project.urls]
+Homepage = "https://github.com/warnetech/claude-code-assist"
+Source = "https://github.com/warnetech/claude-code-assist"
+
+[project.scripts]
+llmforge = "llmforge.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/llmforge"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]

@@ -1,0 +1,3 @@
+{"id": "q1", "prompt": "Name three uses of SQLite in one line each."}
+{"id": "q2", "prompt": "What is a context window? One sentence."}
+{"id": "q3", "prompt": "Translate 'local-first' into plain English.", "model": "local/llama3.2"}

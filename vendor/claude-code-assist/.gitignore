@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Node
+node_modules/
+packages/llmforge-typescript/dist/
+*.tsbuildinfo
+
+# Tooling / local state
+.env
+.env.*
+!.env.example
+.DS_Store
+
+# llmforge run artifacts
+.llmforge/
+traces/
+*.trace.jsonl
+
+# TS build inputs installed locally
+package-lock.json

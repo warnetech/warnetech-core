@@ -1,2 +1,0 @@
-chmod +x bootstrap_repo.sh
-./bootstrap_repo.sh

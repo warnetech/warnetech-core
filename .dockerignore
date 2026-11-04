@@ -1,0 +1,19 @@
+# Keep weights, secrets and history out of every image build.
+# The Dockerfile copies the whole context, so anything not listed here ends up in the image.
+models/
+*.safetensors
+*.gguf
+.git/
+.github/
+.env
+.env.*
+!.env.example
+.clawness/
+data/
+vendor/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+tests/
+docs/

@@ -1,0 +1,59 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "warnetech-core"
+version = "0.1.0"
+description = "Shared AI gateway and memory/context layer for Warnetech projects."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "httpx>=0.27",
+    "pydantic>=2.6",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+service = ["fastapi>=0.110", "uvicorn[standard]>=0.29"]
+pgvector = ["psycopg[binary,pool]>=3.1"]
+# Local weights through Hugging Face transformers. transformers 5 and torch need Python 3.11+,
+# so these only install there. accelerate is required for device_map="auto".
+hf = [
+    "transformers>=5,<6; python_version >= '3.11'",
+    "torch>=2; python_version >= '3.11'",
+    "accelerate>=1; python_version >= '3.11'",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.4",
+]
+
+[project.scripts]
+warnetech = "warnetech_core.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/warnetech_core"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# `Depends(...)` in argument defaults is the FastAPI idiom, not a mutable default.
+"src/warnetech_core/service/app.py" = ["B008"]
+
+[tool.codeflash]
+module-root = "src/warnetech_core"
+tests-root = "tests"
+ignore-paths = ["dist", "**/node_modules", "**/__tests__"]
+formatter-cmds = ["disabled"]

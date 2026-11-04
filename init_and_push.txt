@@ -1,2 +1,0 @@
-chmod +x init_and_push.sh
-./init_and_push.sh

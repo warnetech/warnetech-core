@@ -27,4 +27,4 @@ RUN mkdir -p /app/data/rag_memory
 EXPOSE 8080
 
 # Define execution entry point
-ENTRYPOINT ["python3", "main.py"]
+ENTRYPOINT ["python3", "scripts/main.py"]

@@ -1,0 +1,2 @@
+{"id": "a", "vars": {"bullets": "3", "audience": "executives"}, "prompt": "MCP is an open protocol that lets AI apps call tools and read data from external servers."}
+{"id": "b", "vars": {"bullets": "2", "audience": "new hires"}, "prompt": "Ollama runs open-weight models locally behind a simple HTTP API."}

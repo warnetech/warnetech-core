@@ -1,0 +1,213 @@
+{
+  "version": 1,
+  "note": "Golden fixtures pinning the Python and TypeScript assurance gates to identical behaviour. Both test suites load this file and assert the same violation codes and severities. Adapted from the interop-test discipline in tewartech-node/claude-command-cli, whose warnetech_envelope docstring records what a second, unpinned implementation cost: 'never add a second implementation; that is what broke the CLI/Worker channel.' Assertions are on `code`, never on prose -- messages get reworded, codes do not. Adding a finding means adding it here first, then to both implementations.",
+  "complexity": [
+    {
+      "name": "clean code passes",
+      "code": "def add(a, b):\n    return a + b\n",
+      "options": {},
+      "expect": []
+    },
+    {
+      "name": "line budget blocks",
+      "code": "x1 = 1\nx2 = 2\nx3 = 3\nx4 = 4\nx5 = 5\n",
+      "options": { "maxLines": 3 },
+      "expect": [["simplicity.line-budget", "blocker"]]
+    },
+    {
+      "name": "comments and blanks do not count",
+      "code": "# a comment\n\n// another\nx = 1\n",
+      "options": { "maxLines": 1 },
+      "expect": []
+    },
+    {
+      "name": "growth against baseline blocks",
+      "code": "a = 1\nb = 2\nc = 3\nd = 4\ne = 5\n",
+      "options": { "baselineLines": 1 },
+      "expect": [["simplicity.growth-ratio", "blocker"]]
+    },
+    {
+      "name": "growth exactly at the ratio does not block",
+      "code": "a = 1\nb = 2\nc = 3\nd = 4\n",
+      "options": { "baselineLines": 1 },
+      "expect": []
+    },
+    {
+      "name": "continuation lines are not nesting",
+      "code": "def build():\n    return call(\n        first,\n            second,\n                third,\n                    fourth,\n    )\n",
+      "options": { "maxNesting": 2 },
+      "expect": []
+    },
+    {
+      "name": "real python nesting is caught",
+      "code": "def f():\n    if a:\n        for b in c:\n            while d:\n                with e:\n                    pass\n",
+      "options": { "maxNesting": 3 },
+      "expect": [["simplicity.nesting-depth", "warn"]]
+    },
+    {
+      "name": "real typescript nesting is caught",
+      "code": "function f() {\n  if (a) {\n    for (const b of c) {\n      while (d) {\n        go();\n      }\n    }\n  }\n}\n",
+      "options": { "maxNesting": 2 },
+      "expect": [["simplicity.nesting-depth", "warn"]]
+    },
+    {
+      "name": "python abstract base",
+      "code": "class HandlerBase:\n    pass\n",
+      "options": {},
+      "expect": [["simplicity.speculative", "note"]]
+    },
+    {
+      "name": "typescript abstract base",
+      "code": "export abstract class AbstractHandlerBase {}\n",
+      "options": {},
+      "expect": [["simplicity.speculative", "note"]]
+    },
+    {
+      "name": "python factory",
+      "code": "def make_handler_factory():\n    pass\n",
+      "options": {},
+      "expect": [["simplicity.speculative", "note"]]
+    },
+    {
+      "name": "typescript factory",
+      "code": "function makeHandlerFactory() {}\n",
+      "options": {},
+      "expect": [["simplicity.speculative", "note"]]
+    },
+    {
+      "name": "python swallowed error",
+      "code": "try:\n    go()\nexcept Exception:\n    pass\n",
+      "options": {},
+      "expect": [["simplicity.speculative", "note"]]
+    },
+    {
+      "name": "typescript swallowed error",
+      "code": "try { go(); } catch {}\n",
+      "options": {},
+      "expect": [["simplicity.speculative", "note"]]
+    },
+    {
+      "name": "python todo scaffold",
+      "code": "# TODO: wire this up later\n",
+      "options": {},
+      "expect": [["simplicity.speculative", "note"]]
+    },
+    {
+      "name": "typescript todo scaffold",
+      "code": "// TODO: wire this up later\n",
+      "options": {},
+      "expect": [["simplicity.speculative", "note"]]
+    }
+  ],
+  "diff": [
+    {
+      "name": "in-scope change passes",
+      "diff": "+++ b/src/upload.py\n@@ -10,2 +10,3 @@\n def upload(path):\n+    retry(3)\n",
+      "options": { "requestTerms": ["upload"], "allowedPaths": ["src/"] },
+      "expect": []
+    },
+    {
+      "name": "out of scope blocks",
+      "diff": "+++ b/src/colors.py\n@@ -1,2 +1,2 @@\n-RED = 1\n+RED = 2\n",
+      "options": { "allowedPaths": ["src/upload/"] },
+      "expect": [["surgical.out-of-scope", "blocker"]]
+    },
+    {
+      "name": "deleted comment blocks",
+      "diff": "+++ b/src/jwt.py\n@@ -1,3 +1,2 @@\n-# leeway is 60s; see INC-2231\n def verify(token):\n     pass\n",
+      "options": {},
+      "expect": [["surgical.comment-deleted", "blocker"]]
+    },
+    {
+      "name": "moved comment warns but does not block",
+      "diff": "+++ b/src/jwt.py\n@@ -1,3 +1,3 @@\n-# leeway is 60s\n def verify(token):\n+# leeway is 60s\n",
+      "options": {},
+      "expect": [["surgical.pure-formatting", "warn"]]
+    },
+    {
+      "name": "pure reformatting warns",
+      "diff": "+++ b/src/colors.py\n@@ -1,2 +1,2 @@\n-RED   = 1\n+RED = 1\n",
+      "options": {},
+      "expect": [["surgical.pure-formatting", "warn"]]
+    },
+    {
+      "name": "unrelated file warns when request terms are given",
+      "diff": "+++ b/src/colors.py\n@@ -1,2 +1,2 @@\n def paint():\n+    pass\n",
+      "options": { "requestTerms": ["upload", "retry"] },
+      "expect": [["surgical.unrelated-file", "warn"]]
+    },
+    {
+      "name": "empty diff is clean",
+      "diff": "",
+      "options": {},
+      "expect": []
+    }
+  ],
+  "criteria": [
+    {
+      "name": "no criteria blocks",
+      "criteria": [],
+      "expect": [["goal.no-criteria", "blocker"]]
+    },
+    {
+      "name": "vague criterion blocks and also lacks a verifier",
+      "criteria": [{ "description": "make it work", "verified": null }],
+      "expect": [
+        ["goal.vague-criterion", "blocker"],
+        ["goal.no-verifier", "warn"]
+      ]
+    },
+    {
+      "name": "verifiable criterion with a verifier is clean",
+      "criteria": [{ "description": "test_upload passes", "verified": true }],
+      "expect": []
+    },
+    {
+      "name": "criterion without a verifier warns only",
+      "criteria": [{ "description": "the docs mention retries", "verified": null }],
+      "expect": [["goal.no-verifier", "warn"]]
+    }
+  ],
+  "ledger": [
+    {
+      "name": "empty ledger blocks",
+      "task": "rewrite the scheduler",
+      "trivial": false,
+      "assumptions": [],
+      "openQuestions": [],
+      "expect": [["think.no-assumptions", "blocker"]]
+    },
+    {
+      "name": "trivial is exempt",
+      "task": "fix typo",
+      "trivial": true,
+      "assumptions": [],
+      "openQuestions": [],
+      "expect": []
+    },
+    {
+      "name": "unsupported assumption warns",
+      "task": "x",
+      "trivial": false,
+      "assumptions": [["the queue is FIFO", ""]],
+      "openQuestions": [],
+      "expect": [["think.unsupported-assumption", "warn"]]
+    },
+    {
+      "name": "supported assumption is clean",
+      "task": "x",
+      "trivial": false,
+      "assumptions": [["the queue is FIFO", "queue.py:31 uses popleft"]],
+      "openQuestions": [],
+      "expect": []
+    },
+    {
+      "name": "open questions block",
+      "task": "x",
+      "trivial": false,
+      "assumptions": [["a", "b"]],
+      "openQuestions": ["which tenant?"],
+      "expect": [["think.open-questions", "blocker"]]
+    }
+  ]
+}

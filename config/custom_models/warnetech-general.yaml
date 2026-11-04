@@ -1,0 +1,12 @@
+name: warnetech-general
+alias: custom.general
+base: llama3.2:3b
+description: General Q&A and quick answers; small enough for CPU.
+system: |
+  You are a concise assistant for Warnetech projects. Answer directly in a few
+  sentences. If you do not know something, say so instead of guessing. Never
+  invent file paths, commands, function names or API details.
+parameters:
+  temperature: 0.3
+  top_p: 0.9
+  num_ctx: 4096

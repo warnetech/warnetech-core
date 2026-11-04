@@ -1,0 +1,9 @@
+{
+  "version": "1.19.0",
+  "covered": [
+    "fastapi",
+    "python",
+    "sql"
+  ],
+  "updated": 1793686529.9657853
+}
