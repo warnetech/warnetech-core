@@ -179,6 +179,14 @@ def cmd_remember(args: argparse.Namespace) -> int:
     return asyncio.run(run())
 
 
+def cmd_doctor(args: argparse.Namespace) -> int:
+    from .runtime.doctor import exit_code, format_text, run_checks, to_dicts
+
+    checks = run_checks(network=args.network)
+    print(json.dumps(to_dicts(checks), indent=2) if args.json else format_text(checks))
+    return exit_code(checks)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="warnetech", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -215,6 +223,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--project", default="default")
     p.add_argument("--key")
     p.set_defaults(func=cmd_remember)
+
+    p = sub.add_parser("doctor", help="check whether this environment can run warnetech-core")
+    p.add_argument("--json", action="store_true", help="machine-readable output")
+    p.add_argument("--network", action="store_true", help="also ask the configured Ollama hosts")
+    p.set_defaults(func=cmd_doctor)
 
     # Command groups built on cli_core (each command capped at 4 parameters).
     from .ollama_commands import group as ollama_group

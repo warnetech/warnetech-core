@@ -27,6 +27,7 @@ wiring decisions it honours and how it plugs into `warnetech_ai_controller`.
 | AGI modules | Reasoning, planning, tool use, reflection and an orchestrator (`agi/`) | |
 | MCP server | 10 tools over stdio, for any MCP client (`mcp-servers/`) | [`mcp-servers/README.md`](mcp-servers/README.md) |
 | Local models | Ollama and LM Studio, a no-network mode, several machines at once | [`docs/OLLAMA.md`](docs/OLLAMA.md) |
+| Deployment | `warnetech doctor`, a service image, air-gapped install, platform support | [`docs/DEPLOY.md`](docs/DEPLOY.md) |
 | Local weights | Run a model from a folder on disk with `transformers`: offline, opt-in, Python 3.11+ | [`docs/LOCAL_WEIGHTS.md`](docs/LOCAL_WEIGHTS.md) |
 | Custom models | Specs for Llama, Mistral and Gemma, `ollama create`, training-data tools, evals | [`docs/CUSTOM_MODELS.md`](docs/CUSTOM_MODELS.md) |
 | Routing | Sends each task to the model suited to it, and chains models into pipelines | [`docs/ROUTING.md`](docs/ROUTING.md) |
@@ -380,6 +381,7 @@ warnetech route explain "Summarise this meeting"   # which model, and why
 warnetech ollama nodes                    # which Ollama machines are up
 warnetech interpreter run "count lines in *.py" --mode dry-run
 warnetech vendor list                     # bundled repos and their source commits
+warnetech doctor                          # can this machine run it? (--json, --network)
 ```
 
 ## Configuration

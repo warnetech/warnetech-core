@@ -74,7 +74,27 @@ services:
               count: all
               capabilities: [gpu]
 
+  # The HTTP service (profile "service": not started by a plain `docker compose up`).
+  #   WARNETECH_API_TOKEN=<choose a token> docker compose --profile service up --build
+  # Without a token the service refuses to start. Add provider keys from your shell, never here.
+  warnetech-service:
+    profiles: ["service"]
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - service-data:/data
+    environment:
+      - WARNETECH_API_TOKEN=${WARNETECH_API_TOKEN:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OLLAMA_HOST=${OLLAMA_HOST:-}
+
 volumes:
   data:
   models:
   ollama-models:
+  service-data:

@@ -28,7 +28,7 @@ src/warnetech_core/
   service/           FastAPI app + schemas
   agi/               AGI capabilities — reasoning, planning, tools, reflection
   interpreter/       Natural-language code execution: workspace, executor, approval, audit
-  runtime/           Host resource probe and the ollama CLI wrapper
+  runtime/           Host resource probe, ollama CLI wrapper, `warnetech doctor`
   custom/            Custom models: spec -> Modelfile -> ollama create; dataset tools; evals
   routing/           Task classifier, model router, multi-model pipelines
 core/                Standalone engine bootstrap (warnetech.sh entry point)
