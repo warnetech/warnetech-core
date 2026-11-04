@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: warnetech-service
+spec:
+  type: ClusterIP   # expose through your own Ingress with TLS; the service speaks plain HTTP
+  selector: {app.kubernetes.io/name: warnetech-service}
+  ports: [{name: http, port: 80, targetPort: http}]
