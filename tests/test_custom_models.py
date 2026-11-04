@@ -8,6 +8,7 @@ a scripted provider.
 import argparse
 import json
 import random
+import sys
 from pathlib import Path
 
 import pytest
@@ -281,6 +282,7 @@ def test_resolve_adapter_accepts_a_file_inside(tmp_path):
     )
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privileges on Windows")
 def test_resolve_adapter_rejects_a_symlink_that_leaves_the_directory(tmp_path):
     outside = tmp_path / "outside.gguf"
     outside.write_text("secret")

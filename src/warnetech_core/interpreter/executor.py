@@ -35,9 +35,12 @@ except ImportError:  # pragma: no cover
     resource = None  # type: ignore[assignment]
 
 MAX_CODE_CHARS = 50_000
+_IS_WINDOWS = sys.platform == "win32"
+# Not defined by subprocess on POSIX; the documented value of the Windows constant.
+_CREATE_NEW_PROCESS_GROUP = 0x00000200
 # The only parent variables a child may see. Anything else, including every
 # credential, is dropped.
-SAFE_ENV_NAMES = ("PATH", "LANG", "LC_ALL", "TZ")
+SAFE_ENV_NAMES = ("PATH", "LANG", "LC_ALL", "TZ", "SYSTEMROOT", "TEMP", "TMP", "TMPDIR")
 _FILE_SIZE_LIMIT = 64 * 1024 * 1024
 
 
@@ -82,6 +85,10 @@ class Executor:
             # -E ignores PYTHON* variables, -s skips the user site directory.
             return [sys.executable, "-E", "-s", "-c", code]
         if language == "bash":
+            if _IS_WINDOWS:
+                # `bash` on Windows often resolves to WSL, a different environment where the
+                # workspace, limits and scrubbed environment would not apply.
+                raise ExecutionRefused("bash is not supported on Windows; use python")
             bash = shutil.which("bash")
             if bash is None:
                 raise ExecutionRefused("bash is not available on this system")
@@ -91,6 +98,8 @@ class Executor:
     def _env(self) -> dict[str, str]:
         env = {k: os.environ[k] for k in SAFE_ENV_NAMES if k in os.environ}
         env["HOME"] = str(self.workspace.root)
+        if _IS_WINDOWS:
+            env["USERPROFILE"] = str(self.workspace.root)
         env["PYTHONDONTWRITEBYTECODE"] = "1"
         return env
 
@@ -129,8 +138,7 @@ class Executor:
                 stdin=subprocess.DEVNULL,
                 stdout=out,
                 stderr=err,
-                start_new_session=True,  # own process group, so a timeout kills children too
-                preexec_fn=self._apply_limits if resource is not None else None,  # noqa: PLW1509
+                **self._popen_options(),
             )
             try:
                 proc.wait(timeout=self.timeout)
@@ -151,8 +159,37 @@ class Executor:
             duration_s=round(duration, 3),
         )
 
+    def _popen_options(self) -> dict:
+        """Platform-specific process-start options.
+
+        POSIX: a new session (so a timeout can kill the whole group) and resource limits.
+        Windows: a new process group; ``preexec_fn`` and ``setrlimit`` do not exist there,
+        so the memory, CPU and file-size limits are not applied.
+        """
+        if _IS_WINDOWS:
+            return {"creationflags": _CREATE_NEW_PROCESS_GROUP}
+        options: dict = {"start_new_session": True}
+        if resource is not None:
+            options["preexec_fn"] = self._apply_limits  # noqa: PLW1509
+        return options
+
     @staticmethod
     def _kill_group(proc: subprocess.Popen) -> None:
+        """Kill the child and everything it started."""
+        if _IS_WINDOWS:
+            # taskkill /T ends the whole tree; killing the child itself is the fallback.
+            try:
+                subprocess.run(  # noqa: S603 - fixed argv, no shell
+                    ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+                    capture_output=True, timeout=10, check=False,
+                )
+            except (OSError, subprocess.SubprocessError):
+                pass
+            try:
+                proc.kill()
+            except OSError:
+                pass
+            return
         try:
             os.killpg(proc.pid, signal.SIGKILL)
         except (ProcessLookupError, PermissionError):

@@ -137,6 +137,7 @@ def test_missing_folder_is_refused(tmp_path):
         TransformersProvider(tmp_path).model_dir("absent")
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privileges on Windows")
 def test_symlink_pointing_outside_the_root_is_refused(tmp_path):
     outside = tmp_path / "outside"
     outside.mkdir()
