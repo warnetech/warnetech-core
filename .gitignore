@@ -37,6 +37,8 @@ htmlcov/
 # Local Data Stores, Models & RAG Memory
 data/
 models/
+*.safetensors
+*.gguf
 *.db
 *.sqlite3
 

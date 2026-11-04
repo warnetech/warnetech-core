@@ -33,6 +33,14 @@ models:
     context_window: 8192
     max_output_tokens: 1024
 
+  # Weights read from WARNETECH_HF_MODELS_DIR/mistral-7b through transformers (see docs/LOCAL_WEIGHTS.md).
+  - alias: local.mistral-hf
+    provider: transformers
+    provider_model: mistral-7b
+    tags: [role:instruction, local-weights]
+    context_window: 8192
+    max_output_tokens: 2048
+
 aliases:
   chat.local: local.general
   extract.local: local.instruction

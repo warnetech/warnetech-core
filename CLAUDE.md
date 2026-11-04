@@ -22,7 +22,7 @@ src/warnetech_core/
   errors.py          Exception hierarchy
   types.py           Provider-neutral request/response types
   integrations/      make_embed_fn — warnetech_ai_controller bridge
-  providers/         base, http, anthropic, openai, nvidia, echo (offline)
+  providers/         base, http, anthropic, openai, nvidia, ollama, lmstudio, hf_local, echo (offline)
   prompts/           PromptTemplate (versioned, strict), PromptRegistry
   memory/            types, base, inmemory, sqlite, pgvector, supabase, service
   service/           FastAPI app + schemas

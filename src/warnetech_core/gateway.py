@@ -138,6 +138,11 @@ class AIGateway:
             providers["ollama"] = OllamaProvider()
         for name, base_url in parse_nodes(os.getenv("OLLAMA_NODES")).items():
             providers[name] = OllamaProvider(host=base_url.removesuffix("/v1"), name=name)
+        # Local weights through transformers: opt-in, offline, and allowed in local-only mode.
+        if os.getenv("WARNETECH_HF_MODELS_DIR"):
+            from .providers.hf_local import TransformersProvider
+
+            providers["transformers"] = TransformersProvider(os.environ["WARNETECH_HF_MODELS_DIR"])
         # LM Studio's local server is opt-in the same way: set LMSTUDIO_HOST.
         if os.getenv("LMSTUDIO_HOST"):
             from .providers.lmstudio import LMStudioProvider

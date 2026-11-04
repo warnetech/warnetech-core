@@ -47,6 +47,33 @@ services:
       timeout: 10s
       retries: 3
 
+  # Local weights through transformers (profile "hf": not started by a plain `docker compose up`).
+  # Put the model in ./models/mistral-7b on the host; it is mounted read-only and never copied
+  # into the image or committed. Needs an NVIDIA GPU and the NVIDIA container toolkit; without
+  # one the model falls back to CPU, which is very slow for a 7B model.
+  #   WARNETECH_API_TOKEN=... docker compose --profile hf up --build llm-runtime
+  llm-runtime:
+    profiles: ["hf"]
+    build:
+      context: .
+      dockerfile: Dockerfile.hf
+    container_name: local-llm-service
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8082:8080"
+    volumes:
+      - ./models:/app/models:ro
+    environment:
+      # Empty here means the service refuses to start; set it in your shell or .env.
+      - WARNETECH_API_TOKEN=${WARNETECH_API_TOKEN:-}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
 volumes:
   data:
   models:

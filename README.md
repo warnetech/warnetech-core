@@ -27,6 +27,7 @@ wiring decisions it honours and how it plugs into `warnetech_ai_controller`.
 | AGI modules | Reasoning, planning, tool use, reflection and an orchestrator (`agi/`) | |
 | MCP server | 10 tools over stdio, for any MCP client (`mcp-servers/`) | [`mcp-servers/README.md`](mcp-servers/README.md) |
 | Local models | Ollama and LM Studio, a no-network mode, several machines at once | [`docs/OLLAMA.md`](docs/OLLAMA.md) |
+| Local weights | Run a model from a folder on disk with `transformers`: offline, opt-in, Python 3.11+ | [`docs/LOCAL_WEIGHTS.md`](docs/LOCAL_WEIGHTS.md) |
 | Custom models | Specs for Llama, Mistral and Gemma, `ollama create`, training-data tools, evals | [`docs/CUSTOM_MODELS.md`](docs/CUSTOM_MODELS.md) |
 | Routing | Sends each task to the model suited to it, and chains models into pipelines | [`docs/ROUTING.md`](docs/ROUTING.md) |
 | Interpreter | Natural-language code execution with approval, limits and an audit log | [`docs/INTERPRETER.md`](docs/INTERPRETER.md) |
@@ -422,7 +423,7 @@ src/warnetech_core/
   cli.py          `warnetech` command
   sync.py         SyncRunner — async gateway from synchronous code
   integrations/   make_embed_fn — warnetech_ai_controller bridge
-  providers/      base, http, anthropic, openai, nvidia, ollama, lmstudio, echo (offline)
+  providers/      base, http, anthropic, openai, nvidia, ollama, lmstudio, hf_local, echo (offline)
   prompts/        PromptTemplate (versioned, strict), PromptRegistry
   memory/         types, base, inmemory, sqlite, pgvector, supabase, service
   service/        FastAPI app + schemas
