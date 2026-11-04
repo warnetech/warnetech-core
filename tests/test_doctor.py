@@ -212,3 +212,53 @@ def test_the_command_text_output_has_a_python_line(capsys, monkeypatch):
     cli_main(["doctor"])
     assert any(line.startswith("ok    python") for line in capsys.readouterr().out.splitlines())
     assert os.environ.get("WARNETECH_OFFLINE") == "1"
+
+
+# ---- Android / 32-bit -------------------------------------------------------------
+
+
+from warnetech_core.runtime.doctor import detect_android  # noqa: E402
+
+
+@pytest.mark.parametrize(
+    "env,platform_name,expected",
+    [
+        ({"TERMUX_VERSION": "0.118"}, "linux", "termux"),
+        ({"ANDROID_ROOT": "/system", "ANDROID_DATA": "/data"}, "linux", "android"),
+        ({}, "android", "android"),
+        ({"ANDROID_ROOT": "/system"}, "linux", None),  # one variable alone is not enough
+        ({}, "linux", None),
+    ],
+)
+def test_detect_android(env, platform_name, expected):
+    assert detect_android(env, platform_name) == expected
+
+
+def test_termux_arm64_is_reported_without_warning():
+    env = {"TERMUX_VERSION": "0.118"}
+    checks = run(env, machine="aarch64", pointer_bits=64, sys_platform="linux")
+    assert checks["android"].status == "info"
+    assert "termux" in checks["android"].detail and "64-bit" in checks["android"].detail
+    assert "python bits" not in checks
+
+
+def test_32_bit_python_warns_everywhere():
+    checks = run({}, machine="armv7l", pointer_bits=32, sys_platform="linux")
+    assert checks["python bits"].status == "warn"
+    assert "android" not in checks
+
+
+def test_32_bit_python_on_termux_points_at_64_bit_devices():
+    checks = run({"TERMUX_VERSION": "1"}, machine="armv7l", pointer_bits=32, sys_platform="linux")
+    assert checks["python bits"].status == "warn"
+    assert "Termux" in checks["python bits"].detail
+
+
+def test_android_on_an_unexpected_architecture_warns():
+    checks = run({"TERMUX_VERSION": "1"}, machine="i686", pointer_bits=64, sys_platform="linux")
+    assert checks["android"].status == "warn"
+
+
+def test_plain_linux_has_no_android_check():
+    checks = run({}, machine="x86_64", pointer_bits=64, sys_platform="linux")
+    assert "android" not in checks and "python bits" not in checks

@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: warnetech-service
+  labels: {app.kubernetes.io/name: warnetech-service}
+spec:
+  replicas: 1   # SQLite stores live on the volume: scale out only after moving to Postgres
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app.kubernetes.io/name: warnetech-service}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: warnetech-service}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: service
+          image: ghcr.io/warnetech/warnetech-core:latest  # pin a version tag or digest in production
+          ports: [{name: http, containerPort: 8080}]
+          envFrom:
+            - configMapRef: {name: warnetech-config}
+            - secretRef: {name: warnetech-secrets, optional: true}
+          env:
+            - {name: WARNETECH_MEMORY_PATH, value: /data/warnetech_memory.db}
+            - {name: WARNETECH_USAGE_PATH, value: /data/warnetech_usage.db}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          readinessProbe: {httpGet: {path: /health, port: http}, periodSeconds: 10}
+          livenessProbe: {httpGet: {path: /health, port: http}, initialDelaySeconds: 15, periodSeconds: 20}
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {memory: 512Mi}
+          volumeMounts:
+            - {name: data, mountPath: /data}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: warnetech-data}
+        - name: tmp
+          emptyDir: {}

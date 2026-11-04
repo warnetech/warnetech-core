@@ -17,6 +17,7 @@ import logging
 import os
 import platform
 import shutil
+import struct
 import sys
 from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass
@@ -75,6 +76,19 @@ def detect_container(
     return None
 
 
+def detect_android(env: Mapping[str, str], sys_platform: str) -> str | None:
+    """Name the Android environment if there is evidence of one, else ``None``.
+
+    Termux sets ``TERMUX_VERSION``; every Android process has ``ANDROID_ROOT``; CPython 3.13+
+    reports ``sys.platform == "android"`` when built for the platform.
+    """
+    if env.get("TERMUX_VERSION"):
+        return "termux"
+    if sys_platform == "android" or (env.get("ANDROID_ROOT") and env.get("ANDROID_DATA")):
+        return "android"
+    return None
+
+
 def _read(path: str) -> str:
     return Path(path).read_text(encoding="utf-8", errors="replace")
 
@@ -89,6 +103,9 @@ def run_checks(
     access: Callable[[str, int], bool] = os.access,
     disk_free: Callable[[str], int] = lambda p: shutil.disk_usage(p).free,
     network: bool = False,
+    machine: str | None = None,
+    pointer_bits: int | None = None,
+    sys_platform: str | None = None,
 ) -> list[Check]:
     env = os.environ if env is None else env
     py = python_version or (sys.version_info.major, sys.version_info.minor)
@@ -102,6 +119,21 @@ def run_checks(
         add("python", "fail", f"{py[0]}.{py[1]} is too old; 3.10 or newer is required")
     else:
         add("python", "ok", f"{py[0]}.{py[1]} on {platform.system()} {platform.machine()}")
+    arch = (machine if machine is not None else platform.machine()).lower()
+    bits = pointer_bits if pointer_bits is not None else struct.calcsize("P") * 8
+    android = detect_android(env, sys_platform if sys_platform is not None else sys.platform)
+    if android:
+        add("android", "info", f"running on Android ({android}), {arch}, {bits}-bit Python")
+    if bits == 32:
+        add(
+            "python bits",
+            "warn",
+            "32-bit Python: pydantic-core has no wheels and large models will not fit in "
+            "memory; use a 64-bit (arm64-v8a / x86_64) Python"
+            + (" - Termux on a 64-bit device" if android else ""),
+        )
+    elif android and arch not in {"aarch64", "arm64", "x86_64"}:
+        add("android", "warn", f"unexpected architecture {arch!r} for 64-bit Android")
     container = detect_container(env, exists, read_text)
     add("container", "info", f"running in {container}" if container else "not in a container")
 
