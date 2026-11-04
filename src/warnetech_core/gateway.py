@@ -144,6 +144,11 @@ class AIGateway:
 
             providers["transformers"] = TransformersProvider(os.environ["WARNETECH_HF_MODELS_DIR"])
         # LM Studio's local server is opt-in the same way: set LMSTUDIO_HOST.
+        # llama.cpp's llama-server likewise: set LLAMACPP_HOST.
+        if os.getenv("LLAMACPP_HOST"):
+            from .providers.llamacpp import LlamaCppProvider
+
+            providers["llamacpp"] = LlamaCppProvider()
         if os.getenv("LMSTUDIO_HOST"):
             from .providers.lmstudio import LMStudioProvider
 

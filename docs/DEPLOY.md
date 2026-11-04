@@ -13,7 +13,7 @@ or a proxy password, and never contacts hosted providers. `--json` for scripts.
 | macOS, Python 3.12 | Supported | CI, blocking |
 | Windows, Python 3.12 | Supported, with limits | CI, blocking. Interpreter limits (memory, CPU, file size) and `bash` are POSIX-only; `bash` is refused on Windows |
 | Linux arm64, Raspberry Pi | Supported | CI on `ubuntu-24.04-arm`; multi-arch image built (amd64+arm64) by `image.yml`. Not run on a Pi |
-| Android 64-bit (arm64-v8a), Termux | Untested on a device | `scripts/termux_install.sh` and `warnetech doctor` detection exist; arm64 Linux CI is only a proxy (same ISA, glibc not bionic). pydantic-core compiles from source (slow). 32-bit Android is unsupported. Ollama is not packaged for Termux: point `OLLAMA_HOST` at another machine |
+| Android 64-bit (arm64-v8a), Termux | Verified on one device | `scripts/termux_install.sh` ran to completion natively (Python 3.14, aarch64; pydantic-core compiled from source) and `warnetech doctor` detected Termux. Debian under proot-distro also ran the full suite (742 passed). The test suite was not run in native Termux. 32-bit Android is unsupported. Ollama is not packaged for Termux: point `OLLAMA_HOST` at another machine |
 | Kubernetes | Manifests, not applied | `deploy/kubernetes/` (kustomize); checked structurally by tests only, never against a cluster |
 | Python older than 3.10 | Not supported | |
 | Local weights (`hf` extra) | Python 3.11+ only | `transformers` 5 and `torch` require it |

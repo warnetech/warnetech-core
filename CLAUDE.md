@@ -22,9 +22,11 @@ src/warnetech_core/
   errors.py          Exception hierarchy
   types.py           Provider-neutral request/response types
   integrations/      make_embed_fn — warnetech_ai_controller bridge
-  providers/         base, http, anthropic, openai, nvidia, ollama, lmstudio, hf_local, echo (offline)
+  providers/         base, http, anthropic, openai, nvidia, ollama, lmstudio, llamacpp, hf_local, echo (offline)
   prompts/           PromptTemplate (versioned, strict), PromptRegistry
-  memory/            types, base, inmemory, sqlite, pgvector, supabase, service
+  memory/            types, base, inmemory, sqlite, pgvector, supabase, service, ingest
+  delegation/        Sub-agents (/delegate): YAML specs, runner with parallel/budget/no-nesting limits
+  chat.py            Interactive chat: core memory + retrieved context + session history
   service/           FastAPI app + schemas
   agi/               AGI capabilities — reasoning, planning, tools, reflection
   interpreter/       Natural-language code execution: workspace, executor, approval, audit
