@@ -106,6 +106,11 @@ app = FastAPI(
 )
 
 
+from .webhooks import build_router as _build_webhook_router  # noqa: E402
+
+app.include_router(_build_webhook_router(get_gateway))
+
+
 # ---- error translation --------------------------------------------------
 
 @app.exception_handler(AllProvidersFailed)

@@ -66,4 +66,10 @@ No relay is built here. Use Tailscale or a Cloudflare Tunnel to reach the servic
 
 ## Not built yet
 
-Remote MCP over HTTPS (`POST /mcp`), the signed webhook connector, and Slack/Discord adapters.
+Remote MCP over HTTPS (`POST /mcp`) and Slack/Discord adapters.
+
+## Signed webhooks
+
+`POST /v1/webhooks/{name}` takes `{"text": "..."}` and returns the model's reply. Each caller has its own secret. Set `WARNETECH_WEBHOOKS=ops`, `WARNETECH_WEBHOOK_SECRET_OPS` (16+ characters) and optionally `WARNETECH_WEBHOOK_MODEL_OPS`.
+
+Sign `"<unix-seconds>.<raw body>"` with HMAC-SHA256 and send it as `X-Warnetech-Signature: v1=<hex>` with `X-Warnetech-Timestamp`. Requests more than 5 minutes off, replayed (409), or over 64 KB (413) are refused; unknown names get 404. Put the service behind TLS, since the body is not encrypted. Tested offline only, not against a real chat bridge.
