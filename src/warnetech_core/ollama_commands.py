@@ -10,6 +10,7 @@ Commands:
 
 from __future__ import annotations
 
+import asyncio
 import os
 import sys
 from collections.abc import Mapping
@@ -17,9 +18,11 @@ from typing import Any
 
 from .cli_core import Command, CommandGroup, Param
 from .errors import ConfigError
+from .providers.ollama import ollama_base_url, parse_nodes
 from .runtime import OllamaCLI, Resources, probe_resources, recommend_model
 from .runtime.local_models import load_catalogue, resolve_install_target
 from .runtime.local_models import plan as plan_fit
+from .runtime.nodes import check_nodes
 
 DEFAULT_CATALOGUE = "config/local_models.yaml"
 
@@ -157,4 +160,25 @@ group.register(
         handle_install,
         (Param("target", help="role name or Ollama tag"),),
     )
+)
+
+
+def handle_nodes(values: Mapping[str, Any]) -> int:
+    nodes: dict[str, str] = {}
+    if os.getenv("OLLAMA_HOST"):
+        nodes["ollama"] = ollama_base_url()
+    nodes.update(parse_nodes(os.getenv("OLLAMA_NODES")))
+    if not nodes:
+        _emit("no Ollama hosts configured; set OLLAMA_HOST or OLLAMA_NODES")
+        return 1
+    statuses = asyncio.run(check_nodes(nodes, client=values.get("_http")))
+    _emit(f"{'NODE':<18} {'STATUS':<14} MODELS")
+    for st in statuses:
+        state = "up" if st.reachable else f"down ({st.error})"
+        _emit(f"{st.name:<18} {state:<14} {', '.join(st.models) or '-'}")
+    return 0 if all(st.reachable for st in statuses) else 1
+
+
+group.register(
+    Command("nodes", "which Ollama machines are reachable and what they hold", handle_nodes)
 )

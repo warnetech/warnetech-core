@@ -6,14 +6,13 @@ Every command takes at most four parameters (see :mod:`warnetech_core.cli_core`)
 from __future__ import annotations
 
 import asyncio
-import functools
 import os
 import sys
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from .cli_core import Command, CommandGroup, Param
+from .cli_core import Command, CommandGroup, Param, report_config_errors
 from .config import Settings
 from .custom import (
     CustomModel,
@@ -38,18 +37,7 @@ def _emit(text: str) -> None:
     sys.stdout.write(text + "\n")
 
 
-def _guard(handler):
-    """Report a configuration problem as a one-line error instead of a traceback."""
-
-    @functools.wraps(handler)
-    def wrapper(values: Mapping[str, Any]) -> int:
-        try:
-            return handler(values)
-        except ConfigError as exc:
-            sys.stderr.write(f"error: {exc}\n")
-            return 1
-
-    return wrapper
+_guard = report_config_errors
 
 
 def _specs_dir() -> Path:

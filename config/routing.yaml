@@ -1,0 +1,10 @@
+# Which model handles which kind of task, in order of preference.
+# The router picks the first alias whose provider is registered in this process,
+# so hosted aliases are skipped automatically under WARNETECH_LOCAL_ONLY=1.
+# Aliases come from config/custom_models/ and config/local_models.yaml.
+default: chat
+tasks:
+  summarise: [custom.summarise, summarise.local]
+  extract: [custom.instruct, extract.local]
+  code: [custom.instruct, custom.general]
+  chat: [custom.general, chat.local]

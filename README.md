@@ -1,6 +1,7 @@
 # warnetech-core
 
-Shared **AI gateway** and **memory/context layer** for Warnetech projects.
+Shared **AI gateway**, **memory/context layer** and **local-model toolkit** for
+Warnetech projects.
 
 Two problems, solved once instead of per project:
 
@@ -16,6 +17,20 @@ deployed projects need one bill and one memory store. Same code path either way.
 Built to drop into the existing Warnetech architecture — see
 [`docs/WARNETECH-ALIGNMENT.md`](docs/WARNETECH-ALIGNMENT.md) for the canonical
 wiring decisions it honours and how it plugs into `warnetech_ai_controller`.
+
+---
+
+## Also in this repo
+
+| | What | Docs |
+|---|---|---|
+| AGI modules | Reasoning, planning, tool use, reflection and an orchestrator (`agi/`) | |
+| MCP server | 10 tools over stdio, for any MCP client (`mcp-servers/`) | [`mcp-servers/README.md`](mcp-servers/README.md) |
+| Local models | Ollama and LM Studio, a no-network mode, several machines at once | [`docs/OLLAMA.md`](docs/OLLAMA.md) |
+| Custom models | Specs for Llama, Mistral and Gemma, `ollama create`, training-data tools, evals | [`docs/CUSTOM_MODELS.md`](docs/CUSTOM_MODELS.md) |
+| Routing | Sends each task to the model suited to it, and chains models into pipelines | [`docs/ROUTING.md`](docs/ROUTING.md) |
+| Interpreter | Natural-language code execution with approval, limits and an audit log | [`docs/INTERPRETER.md`](docs/INTERPRETER.md) |
+| Bundled repos | `claude-code-assist` and `CLI-AI-Command-Center-PRD`, offline | [`vendor/README.md`](vendor/README.md) |
 
 ---
 
@@ -352,6 +367,20 @@ warnetech remember "Standup is at 09:30." --project hub-notes
 warnetech ask "when is standup?" --project hub-notes --with-memory
 ```
 
+Local models, custom models, the interpreter and the bundled repos each have a
+command group. Every command takes at most four parameters.
+
+```bash
+warnetech ollama plan                     # local models and whether they fit this host
+warnetech ollama install general          # install one by role (or a raw tag)
+warnetech custom create warnetech-general # build a custom model from its spec
+warnetech custom eval config/evals/custom.yaml --model custom.general
+warnetech route explain "Summarise this meeting"   # which model, and why
+warnetech ollama nodes                    # which Ollama machines are up
+warnetech interpreter run "count lines in *.py" --mode dry-run
+warnetech vendor list                     # bundled repos and their source commits
+```
+
 ## Configuration
 
 Everything is environment-driven; see `.env.example` for the full list.
@@ -372,7 +401,7 @@ memory = MemoryService(gateway, SQLiteContextStore("memory.db"))
 
 ```bash
 pip install -e ".[dev,service]"
-pytest              # 216 tests, fully offline
+pytest              # 500+ tests, fully offline
 ruff check src tests
 ```
 
@@ -393,10 +422,19 @@ src/warnetech_core/
   cli.py          `warnetech` command
   sync.py         SyncRunner — async gateway from synchronous code
   integrations/   make_embed_fn — warnetech_ai_controller bridge
-  providers/      base, http, anthropic, openai, nvidia, echo (offline)
+  providers/      base, http, anthropic, openai, nvidia, ollama, lmstudio, echo (offline)
   prompts/        PromptTemplate (versioned, strict), PromptRegistry
   memory/         types, base, inmemory, sqlite, pgvector, supabase, service
   service/        FastAPI app + schemas
+  agi/            reasoning, planning, tool use, reflection, orchestrator
+  interpreter/    workspace, executor, approval policy, audit log, model loop
+  runtime/        host resource probe, ollama CLI wrapper, local model catalogue
+  custom/         model specs, Modelfile, dataset tools, evals
+  routing/        task classifier, router, pipelines
+config/           local_models.yaml, custom_models/, evals/
+mcp-servers/      warnetech_mcp: MCP server (10 tools)
+scripts/          entry points and bootstrap scripts, vendor_sync.sh
+vendor/           bundled repos (git subtrees) and vendor.json
 ```
 
 ## Status
@@ -410,6 +448,13 @@ src/warnetech_core/
   Supabase run as a smoke test.
 - `migrations/0001_warnetech_memory.sql` has not been applied anywhere yet.
   Review it before running it against the shared project.
+- The Ollama commands (`ollama install`, `custom create`) have been tested
+  against a fake Ollama only. Run `warnetech custom create warnetech-general`
+  once on a real install, and confirm the model tags with `ollama show`.
+- The interpreter is not a sandbox. Approval of every action is the main
+  control; see [`docs/INTERPRETER.md`](docs/INTERPRETER.md).
+- `providers/provider_router.py` imports `aiohttp`, which is not a declared
+  dependency, and nothing else uses it yet.
 - Model prices in the built-in catalogue drift, and the Nemotron entry is
   priced at zero because NVIDIA's rates were not confirmed. Override them in
   `models.yaml` rather than trusting the table.

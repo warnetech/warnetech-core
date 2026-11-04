@@ -233,6 +233,10 @@ def main(argv: list[str] | None = None) -> int:
 
     custom_group.mount(sub)
 
+    from .routing_commands import group as route_group
+
+    route_group.mount(sub)
+
     args = parser.parse_args(argv)
     if getattr(args, "command", None) == "ollama":
         return ollama_group.dispatch(args)
@@ -242,6 +246,8 @@ def main(argv: list[str] | None = None) -> int:
         return vendor_group.dispatch(args)
     if getattr(args, "command", None) == "custom":
         return custom_group.dispatch(args)
+    if getattr(args, "command", None) == "route":
+        return route_group.dispatch(args)
     return int(args.func(args))
 
 

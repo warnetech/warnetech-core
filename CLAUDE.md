@@ -30,6 +30,7 @@ src/warnetech_core/
   interpreter/       Natural-language code execution: workspace, executor, approval, audit
   runtime/           Host resource probe and the ollama CLI wrapper
   custom/            Custom models: spec -> Modelfile -> ollama create; dataset tools; evals
+  routing/           Task classifier, model router, multi-model pipelines
 core/                Standalone engine bootstrap (warnetech.sh entry point)
 mcp-servers/         MCP server definitions for tool integration
 scripts/             Utility and bootstrap scripts

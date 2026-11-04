@@ -12,6 +12,8 @@ code, which keeps them testable without argparse.
 from __future__ import annotations
 
 import argparse
+import functools
+import sys
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -102,3 +104,18 @@ def _add_param(parser: argparse.ArgumentParser, param: Param) -> None:
         )
     else:
         parser.add_argument(dest, help=param.help, choices=param.choices)
+
+
+def report_config_errors(handler: Handler) -> Handler:
+    """Wrap a handler so a configuration problem prints one line instead of a traceback."""
+    from .errors import ConfigError
+
+    @functools.wraps(handler)
+    def wrapper(values: Mapping[str, Any]) -> int:
+        try:
+            return handler(values)
+        except ConfigError as exc:
+            sys.stderr.write(f"error: {exc}\n")
+            return 1
+
+    return wrapper
