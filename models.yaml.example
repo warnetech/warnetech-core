@@ -26,3 +26,12 @@ aliases:
   # Every project calling `chat.fast` now hits the model named here.
   chat.fast: anthropic.claude-haiku-4-5
   chat.cheap: local.llama
+
+# Local models served by Ollama. Run `warnetech ollama models` to see what is
+# installed and which ones fit this host. Local inference is free, so prices are 0.
+#   models:
+#     - alias: ollama.llama3.1-8b
+#       provider: ollama
+#       provider_model: llama3.1:8b
+#   aliases:
+#     chat.local: ollama.llama3.1-8b

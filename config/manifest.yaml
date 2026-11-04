@@ -1,0 +1,33 @@
+version: "1.0.0"
+system:
+  name: "warnetech-core"
+  environment: "production"
+  debug: false
+  timezone: "Australia/Sydney"
+
+engine:
+  max_concurrent_tasks: 16
+  step_timeout_seconds: 30
+  retry_limit: 3
+
+rag:
+  storage_path: "./data/rag_memory"
+  index_filename: "index.jsonl"
+  top_k_retrieval: 3
+  embedding_dim: 384
+
+orchestrator:
+  default_pipeline:
+    - "context_resolver"
+    - "temporal_reasoner"
+    - "executor"
+  agent_timeout: 15
+
+mcp:
+  server_name: "warnetech-mcp-bridge"
+  transport: "stdio"
+  protocol_version: "2024-11-05"
+  enabled_tools:
+    - "echo"
+    - "rag_search"
+    - "system_diagnostics"

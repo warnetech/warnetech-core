@@ -1,0 +1,26 @@
+# Local-weights runtime: serves the gateway over HTTP with a model read from a mounted folder.
+# Nothing is downloaded at run time and no token is needed. Weights are never copied into
+# this image; mount them read-only (see docker-compose.yml, profile "hf").
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Dependencies first, so a source edit does not reinstall torch.
+COPY pyproject.toml README.md ./
+COPY src ./src
+RUN pip install --no-cache-dir ".[hf,service]"
+
+COPY config ./config
+
+# Run as an unprivileged user.
+RUN useradd --create-home --uid 10001 app
+USER app
+
+ENV WARNETECH_LOCAL_ONLY=1 \
+    WARNETECH_LOCAL_MODELS=/app/config/local_models.yaml \
+    WARNETECH_HF_MODELS_DIR=/app/models \
+    HF_HUB_OFFLINE=1 \
+    TRANSFORMERS_OFFLINE=1
+
+EXPOSE 8080
+CMD ["uvicorn", "warnetech_core.service.app:app", "--host", "0.0.0.0", "--port", "8080"]

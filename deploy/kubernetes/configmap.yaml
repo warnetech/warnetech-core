@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: warnetech-config
+data:
+  WARNETECH_LOCAL_ONLY: "0"
+  # OLLAMA_HOST: "http://ollama.default.svc:11434"

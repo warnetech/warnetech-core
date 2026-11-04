@@ -1,0 +1,63 @@
+# Local model catalogue: the Ollama models this repo runs on your own hardware.
+#
+# Used two ways:
+#   1. `models:` and `aliases:` are a standard models.yaml override. Point
+#      WARNETECH_LOCAL_MODELS at this file and the gateway routes these roles to
+#      local Ollama models.
+#   2. `local:` is install metadata read by `warnetech ollama plan|install`.
+#      The registry ignores it.
+#
+# Tags and sizes are approximate. Confirm a tag with `ollama show <tag>` before
+# relying on it. Sizes are on-disk GB for the default 4-bit quantised build.
+# Local inference has no per-token price, so every rate here is 0.
+
+models:
+  - alias: local.general
+    provider: ollama
+    provider_model: llama3.2:3b
+    tags: [role:general, cpu-friendly]
+    context_window: 8192
+    max_output_tokens: 2048
+
+  - alias: local.instruction
+    provider: ollama
+    provider_model: mistral:7b
+    tags: [role:instruction, structured-output]
+    context_window: 8192
+    max_output_tokens: 2048
+
+  - alias: local.summarise
+    provider: ollama
+    provider_model: gemma2:2b
+    tags: [role:summarise, cpu-friendly]
+    context_window: 8192
+    max_output_tokens: 1024
+
+  # Weights read from WARNETECH_HF_MODELS_DIR/mistral-7b through transformers (see docs/LOCAL_WEIGHTS.md).
+  - alias: local.mistral-hf
+    provider: transformers
+    provider_model: mistral-7b
+    tags: [role:instruction, local-weights]
+    context_window: 8192
+    max_output_tokens: 2048
+
+aliases:
+  chat.local: local.general
+  extract.local: local.instruction
+  summarise.local: local.summarise
+
+local:
+  # Each entry is one model this repo can install. `role` is the task it is
+  # chosen for. Keep a model out of a role it is weak at.
+  - name: general
+    model: llama3.2:3b
+    role: general chat and quick Q&A; runs well on CPU
+    approx_gb: 2.0
+  - name: instruction
+    model: mistral:7b
+    role: following instructions and structured output (JSON, extraction)
+    approx_gb: 4.1
+  - name: summarise
+    model: gemma2:2b
+    role: condensing text; smallest footprint
+    approx_gb: 1.6

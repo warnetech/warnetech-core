@@ -7,14 +7,23 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest]
         python-version: ["3.10", "3.11", "3.12"]
+        include:
+          - os: macos-latest
+            python-version: "3.12"
+          - os: windows-latest
+            python-version: "3.12"
+          # arm64 Linux: same ISA as Raspberry Pi and Android (glibc, not bionic).
+          - os: ubuntu-24.04-arm
+            python-version: "3.12"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
@@ -22,6 +31,10 @@ jobs:
         run: pip install -e ".[dev,service]"
       - name: Lint
         run: ruff check src tests
+      - name: Environment report
+        run: warnetech doctor
+        env:
+          WARNETECH_OFFLINE: "1"
       - name: Test
         run: pytest -q
       - name: Quickstart runs offline

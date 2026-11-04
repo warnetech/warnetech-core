@@ -1,0 +1,100 @@
+version: '3.8'
+
+services:
+  warnetech-core:
+    build: .
+    container_name: warnetech_core_service
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LLM_LOCAL_ENDPOINT=http://llama-server:8080/v1
+    depends_on:
+      - llama-server
+
+  llama-server:
+    image: ghcr.io/ggerganov/llama.cpp:server
+    container_name: warnetech_llama_server
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./models:/models
+    command: >
+      -m /models/model.gguf
+      --port 8080
+      --host 0.0.0.0
+      --ctx-size 4096
+      --n-gpu-layers 33
+
+  # Local model runtime. Models persist in the `ollama-models` volume, so they
+  # are downloaded once and never need the internet again.
+  ollama:
+    image: ollama/ollama:latest
+    container_name: warnetech_ollama
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Local weights through transformers (profile "hf": not started by a plain `docker compose up`).
+  # Put the model in ./models/mistral-7b on the host; it is mounted read-only and never copied
+  # into the image or committed. Needs an NVIDIA GPU and the NVIDIA container toolkit; without
+  # one the model falls back to CPU, which is very slow for a 7B model.
+  #   WARNETECH_API_TOKEN=... docker compose --profile hf up --build llm-runtime
+  llm-runtime:
+    profiles: ["hf"]
+    build:
+      context: .
+      dockerfile: Dockerfile.hf
+    container_name: local-llm-service
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8082:8080"
+    volumes:
+      - ./models:/app/models:ro
+    environment:
+      # Empty here means the service refuses to start; set it in your shell or .env.
+      - WARNETECH_API_TOKEN=${WARNETECH_API_TOKEN:-}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # The HTTP service (profile "service": not started by a plain `docker compose up`).
+  #   WARNETECH_API_TOKEN=<choose a token> docker compose --profile service up --build
+  # Without a token the service refuses to start. Add provider keys from your shell, never here.
+  warnetech-service:
+    profiles: ["service"]
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - service-data:/data
+    environment:
+      - WARNETECH_API_TOKEN=${WARNETECH_API_TOKEN:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OLLAMA_HOST=${OLLAMA_HOST:-}
+
+volumes:
+  data:
+  models:
+  ollama-models:
+  service-data:
