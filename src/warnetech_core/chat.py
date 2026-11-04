@@ -12,6 +12,7 @@ import sys
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
+from .delegation import DelegationRunner
 from .gateway import AIGateway
 from .memory.service import MemoryService
 
@@ -73,7 +74,10 @@ class ChatSession:
         return reply
 
 
-HELP = "/core <fact> pin a fact  |  /remember <text> save a note  |  /exit leave"
+HELP = (
+    "/core <fact> pin a fact  |  /remember <text> save a note  |  /agents list agents  |  "
+    "/delegate <agent> <task>  |  /exit leave"
+)
 
 
 async def run_chat(
@@ -81,6 +85,7 @@ async def run_chat(
     read: Callable[[str], str] = input,
     write: Callable[[str], None] = lambda s: sys.stdout.write(s + "\n"),
     on_turn: Callable[[], Awaitable[None]] | None = None,
+    runner: DelegationRunner | None = None,
 ) -> int:
     write(f"chat ({session.model}, project {session.project}). {HELP}")
     while True:
@@ -100,6 +105,19 @@ async def run_chat(
         elif line.startswith("/remember "):
             rec = await session.memory.remember(session.project, line[10:].strip())
             write(f"stored {rec.id}")
+        elif line == "/agents":
+            for spec in (runner.agents.values() if runner else ()):
+                write(f"{spec.name}: {spec.description}")
+            if not runner or not runner.agents:
+                write("no agents configured (see config/agents/)")
+        elif line.startswith("/delegate"):
+            parts = line.split(None, 2)
+            if runner is None or len(parts) < 3:
+                write("usage: /delegate <agent> <task>   (see /agents)")
+            else:
+                result = await runner.run(parts[1], parts[2])
+                label = "result" if result.ok else "failed"
+                write(f"[{result.agent} {label}, {result.tokens} tokens]\n{result.text}")
         elif line.startswith("/"):
             write(HELP)
         else:

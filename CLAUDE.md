@@ -25,6 +25,7 @@ src/warnetech_core/
   providers/         base, http, anthropic, openai, nvidia, ollama, lmstudio, llamacpp, hf_local, echo (offline)
   prompts/           PromptTemplate (versioned, strict), PromptRegistry
   memory/            types, base, inmemory, sqlite, pgvector, supabase, service, ingest
+  delegation/        Sub-agents (/delegate): YAML specs, runner with parallel/budget/no-nesting limits
   chat.py            Interactive chat: core memory + retrieved context + session history
   service/           FastAPI app + schemas
   agi/               AGI capabilities — reasoning, planning, tools, reflection

@@ -188,7 +188,12 @@ def cmd_chat(args: argparse.Namespace) -> int:
             session = ChatSession(
                 gateway, memory, project=args.project, model=args.model, save=not args.no_save
             )
-            return await run_chat(session)
+            from .delegation import DelegationRunner, load_agents
+
+            runner = DelegationRunner(
+                gateway, load_agents(), memory, project=args.project
+            )
+            return await run_chat(session, runner=runner)
         finally:
             await memory.aclose()
             await gateway.aclose()

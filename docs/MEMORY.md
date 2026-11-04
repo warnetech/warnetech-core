@@ -23,3 +23,11 @@ warnetech chat                           # /core, /remember, /exit
 ## Local models
 
 `OLLAMA_HOST`, `LMSTUDIO_HOST`, `LLAMACPP_HOST` (llama-server) or `WARNETECH_HF_MODELS_DIR` each register a provider. Set `WARNETECH_LOCAL_ONLY=1` to register no hosted provider.
+
+## Sub-agents
+
+In `warnetech chat`: `/agents` lists them, `/delegate <agent> <task>` runs one. Definitions live in `config/agents/*.yaml` (`researcher`, `coder`, `reviewer`); add your own.
+
+Limits enforced in code: no nesting, 3 running at once, 8 jobs per call, a 20,000-token budget per call (jobs not yet started are skipped once it is used), and memory is read-only and opt-in per agent (`memory: true`). An agent returns text only; nothing it returns is run or saved.
+
+Delegation is manual: the chat model does not decide to delegate on its own yet, because small local models are unreliable at it.
