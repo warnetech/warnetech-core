@@ -179,6 +179,23 @@ def cmd_remember(args: argparse.Namespace) -> int:
     return asyncio.run(run())
 
 
+def cmd_chat(args: argparse.Namespace) -> int:
+    from .chat import ChatSession, run_chat
+
+    async def run() -> int:
+        gateway, memory = build(project=args.project)
+        try:
+            session = ChatSession(
+                gateway, memory, project=args.project, model=args.model, save=not args.no_save
+            )
+            return await run_chat(session)
+        finally:
+            await memory.aclose()
+            await gateway.aclose()
+
+    return asyncio.run(run())
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
     from .runtime.doctor import exit_code, format_text, run_checks, to_dicts
 
@@ -224,6 +241,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--key")
     p.set_defaults(func=cmd_remember)
 
+    p = sub.add_parser("chat", help="interactive chat with core memory and persistent RAG")
+    p.add_argument("--model", default="chat.default")
+    p.add_argument("--project", default="default")
+    p.add_argument("--no-save", action="store_true", help="do not remember this conversation")
+    p.set_defaults(func=cmd_chat)
+
     p = sub.add_parser("doctor", help="check whether this environment can run warnetech-core")
     p.add_argument("--json", action="store_true", help="machine-readable output")
     p.add_argument("--network", action="store_true", help="also ask the configured Ollama hosts")
@@ -250,6 +273,10 @@ def main(argv: list[str] | None = None) -> int:
 
     route_group.mount(sub)
 
+    from .memory_commands import group as memory_group
+
+    memory_group.mount(sub)
+
     args = parser.parse_args(argv)
     if getattr(args, "command", None) == "ollama":
         return ollama_group.dispatch(args)
@@ -261,6 +288,8 @@ def main(argv: list[str] | None = None) -> int:
         return custom_group.dispatch(args)
     if getattr(args, "command", None) == "route":
         return route_group.dispatch(args)
+    if getattr(args, "command", None) == "memory":
+        return memory_group.dispatch(args)
     return int(args.func(args))
 
 
