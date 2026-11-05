@@ -24,7 +24,7 @@ src/warnetech_core/
   integrations/      make_embed_fn — warnetech_ai_controller bridge
   providers/         base, http, anthropic, openai, nvidia, ollama, lmstudio, llamacpp, hf_local, echo (offline)
   prompts/           PromptTemplate (versioned, strict), PromptRegistry
-  memory/            types, base, inmemory, sqlite, pgvector, supabase, service, ingest
+  memory/            types, base, inmemory, sqlite, pgvector, supabase, service, ingest, warnetech_memory (JSONL + BM25)
   delegation/        Sub-agents (/delegate): YAML specs, runner with parallel/budget/no-nesting limits
   chat.py            Interactive chat: core memory + retrieved context + session history
   service/           FastAPI app + schemas, signed webhooks, local web UI (warnetech_ui)

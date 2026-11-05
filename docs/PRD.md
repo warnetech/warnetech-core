@@ -44,6 +44,7 @@ Copied from the project directive:
 | Offline test suite, 824 tests passing at last run, echo provider | `tests/` | Test style and fixtures |
 | CI matrix: Ubuntu Python 3.10 to 3.12, arm64 Linux, Windows; macOS queued but never got a runner | `.github/workflows/ci.yml` | TST-009 |
 | Install verified once on 64-bit Android (Debian under proot, and native Termux) | `docs/DEPLOY.md` | Platform baseline |
+| Flat-file memory prototype: append-only `data/rag_store.jsonl`, dedup, tombstones, corrupt-line skip, BM25 (standard library), `get_context`, CLI `warnetech_memory`; 23 tests | `src/warnetech_core/memory/warnetech_memory.py` | Covers most of MEM-001 to MEM-005 and MEM-007 in prototype form; fields are `id`, `ts`, `source`, `text`, `sha256`, `meta`; a 10,000-record search measured 0.21 s on the build machine; still open: PRD acceptance review, `meta` use, and Decision D5 on where the module lives |
 | Offline install from a wheel directory with `--no-index` (24 wheels, verified once for this repo) | earlier session, no script committed | PKG-002 |
 
 **Gaps found.**
