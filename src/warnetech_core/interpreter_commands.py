@@ -23,6 +23,7 @@ from .interpreter import (
     Workspace,
     prompt_approver,
 )
+from .interpreter.executor import ENV_ALLOW_UNENFORCED_MEMORY
 
 group = CommandGroup("interpreter", "control the computer in natural language, with local models")
 
@@ -41,10 +42,16 @@ def handle_run(values: Mapping[str, Any]) -> int:
     audit = AuditLog(os.getenv("WARNETECH_INTERPRETER_AUDIT") or DEFAULT_AUDIT)
     executor = Executor(workspace)
     if not executor.memory_limit_enforced:
-        sys.stderr.write(
-            "warning: the memory limit is not enforced on this platform; approve code "
-            "only if you trust it not to use a lot of memory\n"
-        )
+        if executor.allow_unenforced_memory:
+            sys.stderr.write(
+                "warning: the memory limit is not enforced on this platform; approve code "
+                "only if you trust it not to use a lot of memory\n"
+            )
+        else:
+            sys.stderr.write(
+                "note: the memory limit is not enforced on this platform, so code will be "
+                f"refused. Set {ENV_ALLOW_UNENFORCED_MEMORY}=1 to allow it.\n"
+            )
     interpreter = Interpreter(
         gateway,
         executor,

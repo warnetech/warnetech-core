@@ -45,8 +45,11 @@ Enforced:
   parent. It has no stdin, a timeout that kills the whole process group, output
   caps, and memory, CPU and file-size limits. **The memory limit is enforced on
   Linux only.** On macOS it did not stop a 1 GiB allocation under a 256 MB limit
-  (GitHub's macOS runner), and Windows has no such limit. The CLI and
-  `warnetech doctor` warn when it is not enforced; approval is the protection there.
+  (GitHub's macOS runner), and Windows has no such limit. Elsewhere the executor
+  **refuses to run code** unless you set `WARNETECH_ALLOW_UNENFORCED_MEMORY=1` in the
+  environment (only a clear yes counts: `1`, `true`, `yes`, `on`). The model and MCP
+  clients cannot set it. With it set, the CLI still prints a warning, and approval is
+  the only protection against a program that uses a lot of memory.
 - Only the first code block in a reply counts, and only languages on the
   allowlist (`python` by default; `bash` must be enabled explicitly).
 - Every proposal, denial and execution is written to an audit log. Output and

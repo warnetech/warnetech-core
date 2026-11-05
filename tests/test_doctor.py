@@ -267,4 +267,5 @@ def test_plain_linux_has_no_android_check():
 def test_unenforced_interpreter_memory_limit_is_a_warning():
     checks = run({}, memory_limit_enforced=False)
     assert checks["interpreter memory limit"].status == "warn"
+    assert "WARNETECH_ALLOW_UNENFORCED_MEMORY" in checks["interpreter memory limit"].detail
     assert "interpreter memory limit" not in run({}, memory_limit_enforced=True)

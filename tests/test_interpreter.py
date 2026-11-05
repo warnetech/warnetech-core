@@ -37,6 +37,15 @@ from warnetech_core.providers.lmstudio import DEFAULT_HOST, LMStudioProvider, lm
 from warnetech_core.registry import ModelRegistry, ModelSpec
 from warnetech_core.types import CompletionResponse, TokenUsage
 
+
+@pytest.fixture(autouse=True)
+def _allow_unenforced_memory(monkeypatch):
+    # macOS and Windows do not enforce the memory limit, and code is refused there unless the
+    # operator opts in. These tests exercise running code, so they opt in; the tests of the
+    # refusal itself remove it again.
+    monkeypatch.setenv("WARNETECH_ALLOW_UNENFORCED_MEMORY", "1")
+
+
 posix_only = pytest.mark.skipif(sys.platform == "win32", reason="POSIX resource limits")
 
 
@@ -750,3 +759,56 @@ def test_cli_warns_only_when_the_memory_limit_is_not_enforced(
     assert group.dispatch(ns, _gateway=gateway, _approver=approve_all) == 0
     err = capsys.readouterr().err
     assert ("memory limit is not enforced" in err) is (not enforced)
+
+
+def test_code_is_refused_where_the_memory_limit_is_not_enforced(tmp_path, monkeypatch):
+    monkeypatch.setattr(executor_module, "MEMORY_LIMIT_ENFORCED", False)
+    monkeypatch.delenv("WARNETECH_ALLOW_UNENFORCED_MEMORY")
+    ws = Workspace(tmp_path)
+    with pytest.raises(ExecutionRefused, match="WARNETECH_ALLOW_UNENFORCED_MEMORY"):
+        Executor(ws).run("python", "open('proof.txt', 'w').write('ran')")
+    assert not (tmp_path / "proof.txt").exists()  # nothing was started
+
+
+def test_the_operator_can_opt_in_through_the_environment(tmp_path, monkeypatch):
+    monkeypatch.setattr(executor_module, "MEMORY_LIMIT_ENFORCED", False)
+    assert Executor(Workspace(tmp_path)).run("python", "print('ran')").stdout.strip() == "ran"
+
+
+@pytest.mark.parametrize("value", ["", "0", "no", "off", "false"])
+def test_only_a_clear_yes_opts_in(tmp_path, monkeypatch, value):
+    monkeypatch.setattr(executor_module, "MEMORY_LIMIT_ENFORCED", False)
+    monkeypatch.setenv("WARNETECH_ALLOW_UNENFORCED_MEMORY", value)
+    with pytest.raises(ExecutionRefused):
+        Executor(Workspace(tmp_path)).run("python", "print(1)")
+
+
+def test_an_explicit_argument_beats_the_environment(tmp_path, monkeypatch):
+    monkeypatch.setattr(executor_module, "MEMORY_LIMIT_ENFORCED", False)
+    with pytest.raises(ExecutionRefused):
+        Executor(Workspace(tmp_path), allow_unenforced_memory=False).run("python", "print(1)")
+    assert Executor(Workspace(tmp_path), allow_unenforced_memory=True).run(
+        "python", "print(2)"
+    ).ok
+
+
+def test_no_opt_in_is_needed_where_the_limit_is_enforced(tmp_path, monkeypatch):
+    monkeypatch.setattr(executor_module, "MEMORY_LIMIT_ENFORCED", True)
+    monkeypatch.delenv("WARNETECH_ALLOW_UNENFORCED_MEMORY")
+    assert Executor(Workspace(tmp_path)).run("python", "print(3)").ok
+
+
+def test_cli_run_is_refused_with_a_clear_note_and_runs_nothing(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("WARNETECH_INTERPRETER_AUDIT", str(tmp_path / "audit.jsonl"))
+    monkeypatch.setattr(executor_module, "MEMORY_LIMIT_ENFORCED", False)
+    monkeypatch.delenv("WARNETECH_ALLOW_UNENFORCED_MEMORY")
+    registry = ModelRegistry(
+        specs=[ModelSpec(alias="chat.local", provider="scripted", provider_model="x")]
+    )
+    gateway = AIGateway({"scripted": ScriptedModel([WRITE_PROOF])}, registry=registry)
+    ws_dir = tmp_path / "ws"
+    ns = _parse(["run", "write a file", "--workspace", str(ws_dir)])
+    group.dispatch(ns, _gateway=gateway, _approver=approve_all)
+    captured = capsys.readouterr()
+    assert "will be refused" in captured.err and "WARNETECH_ALLOW_UNENFORCED_MEMORY" in captured.err
+    assert not (ws_dir / "proof.txt").exists()

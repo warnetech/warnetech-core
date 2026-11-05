@@ -145,8 +145,8 @@ def run_checks(
         add(
             "interpreter memory limit",
             "warn",
-            "not enforced on this platform (Linux only); the interpreter still asks before "
-            "running anything",
+            "not enforced on this platform (Linux only), so the interpreter refuses to run code "
+            "unless WARNETECH_ALLOW_UNENFORCED_MEMORY=1",
         )
 
     # ---- dependencies ----

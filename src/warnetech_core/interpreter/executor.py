@@ -42,6 +42,16 @@ _IS_WINDOWS = sys.platform == "win32"
 # accepted or refused and the allocation still succeeds (GitHub's macOS runner let a 1 GiB
 # allocation through a 256 MB limit); Windows has no such limit at all.
 MEMORY_LIMIT_ENFORCED = sys.platform.startswith("linux")
+# Where the limit is not enforced, code is refused unless the operator opts in with this
+# environment variable. It is read from the environment, so neither the model nor an MCP
+# client can switch it on.
+ENV_ALLOW_UNENFORCED_MEMORY = "WARNETECH_ALLOW_UNENFORCED_MEMORY"
+
+
+def allow_unenforced_memory_from_env() -> bool:
+    return os.environ.get(ENV_ALLOW_UNENFORCED_MEMORY, "").strip().lower() in {
+        "1", "true", "yes", "on",
+    }
 # Not defined by subprocess on POSIX; the documented value of the Windows constant.
 _CREATE_NEW_PROCESS_GROUP = 0x00000200
 # The only parent variables a child may see. Anything else, including every
@@ -77,12 +87,18 @@ class Executor:
         max_output: int = 20_000,
         memory_mb: int = 1024,
         allowed_languages: tuple[str, ...] = ("python",),
+        allow_unenforced_memory: bool | None = None,
     ) -> None:
         self.workspace = workspace
         self.timeout = timeout
         self.max_output = max_output
         self.memory_mb = memory_mb
         self.allowed_languages = allowed_languages
+        self.allow_unenforced_memory = (
+            allow_unenforced_memory
+            if allow_unenforced_memory is not None
+            else allow_unenforced_memory_from_env()
+        )
 
     @property
     def memory_limit_enforced(self) -> bool:
@@ -137,6 +153,11 @@ class Executor:
             raise ExecutionRefused(f"language not allowed here: {language!r}")
         if len(code) > self.max_code_chars:
             raise ExecutionRefused(f"code is longer than {self.max_code_chars} characters")
+        if not self.memory_limit_enforced and not self.allow_unenforced_memory:
+            raise ExecutionRefused(
+                "the memory limit is not enforced on this platform, so code is not run; "
+                f"set {ENV_ALLOW_UNENFORCED_MEMORY}=1 to allow it"
+            )
         argv = self._argv(language, code)
 
         started = time.perf_counter()
