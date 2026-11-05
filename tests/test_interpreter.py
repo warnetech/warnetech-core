@@ -183,12 +183,21 @@ def test_code_at_the_size_limit_is_accepted(tmp_path):
     assert result.ok
 
 
-@posix_only
+@pytest.mark.skipif(
+    not sys.platform.startswith("linux"), reason="the memory limit is only enforced on Linux"
+)
 def test_memory_limit_stops_a_runaway_allocation(tmp_path):
     ex = Executor(Workspace(tmp_path), memory_mb=256)
     result = ex.run("python", "x = bytearray(1024 * 1024 * 1024); print('allocated')")
     assert not result.ok
     assert "allocated" not in result.stdout
+
+
+def test_executor_reports_whether_the_memory_limit_is_enforced(tmp_path):
+    from warnetech_core.interpreter import executor as mod
+
+    assert Executor(Workspace(tmp_path)).memory_limit_enforced is mod.MEMORY_LIMIT_ENFORCED
+    assert mod.MEMORY_LIMIT_ENFORCED == sys.platform.startswith("linux")
 
 
 # ---- parser -------------------------------------------------------------
@@ -724,3 +733,20 @@ def test_a_process_that_cannot_start_is_a_clean_refusal(monkeypatch, tmp_path):
     monkeypatch.setattr(subprocess, "Popen", cannot_start)
     with pytest.raises(ExecutionRefused, match="could not start the process"):
         Executor(Workspace(tmp_path)).run("python", "print(1)")
+
+
+@pytest.mark.parametrize("enforced", [True, False])
+def test_cli_warns_only_when_the_memory_limit_is_not_enforced(
+    tmp_path, monkeypatch, capsys, enforced
+):
+    monkeypatch.setenv("WARNETECH_INTERPRETER_AUDIT", str(tmp_path / "audit.jsonl"))
+    monkeypatch.setattr(executor_module, "MEMORY_LIMIT_ENFORCED", enforced)
+    registry = ModelRegistry(
+        specs=[ModelSpec(alias="chat.local", provider="scripted", provider_model="x")]
+    )
+    gateway = AIGateway({"scripted": ScriptedModel([WRITE_PROOF])}, registry=registry)
+    ns = _parse(["run", "write a file", "--workspace", str(tmp_path / "ws"),
+                 "--mode", "dry-run"])
+    assert group.dispatch(ns, _gateway=gateway, _approver=approve_all) == 0
+    err = capsys.readouterr().err
+    assert ("memory limit is not enforced" in err) is (not enforced)

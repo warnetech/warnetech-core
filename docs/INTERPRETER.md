@@ -43,7 +43,10 @@ Enforced:
   and symlinks that point outside are rejected.
 - The child process gets a scrubbed environment: no API keys or tokens from the
   parent. It has no stdin, a timeout that kills the whole process group, output
-  caps, and memory, CPU and file-size limits.
+  caps, and memory, CPU and file-size limits. **The memory limit is enforced on
+  Linux only.** On macOS it did not stop a 1 GiB allocation under a 256 MB limit
+  (GitHub's macOS runner), and Windows has no such limit. The CLI and
+  `warnetech doctor` warn when it is not enforced; approval is the protection there.
 - Only the first code block in a reply counts, and only languages on the
   allowlist (`python` by default; `bash` must be enabled explicitly).
 - Every proposal, denial and execution is written to an audit log. Output and

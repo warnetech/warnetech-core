@@ -39,9 +39,15 @@ def handle_run(values: Mapping[str, Any]) -> int:
     approver = values.get("_approver") or prompt_approver
     workspace = Workspace(values.get("workspace") or DEFAULT_WORKSPACE)
     audit = AuditLog(os.getenv("WARNETECH_INTERPRETER_AUDIT") or DEFAULT_AUDIT)
+    executor = Executor(workspace)
+    if not executor.memory_limit_enforced:
+        sys.stderr.write(
+            "warning: the memory limit is not enforced on this platform; approve code "
+            "only if you trust it not to use a lot of memory\n"
+        )
     interpreter = Interpreter(
         gateway,
-        Executor(workspace),
+        executor,
         model=values.get("model") or "chat.local",
         policy=Policy(mode=values.get("mode") or "ask"),
         approver=approver,

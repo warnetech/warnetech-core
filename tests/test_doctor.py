@@ -262,3 +262,9 @@ def test_android_on_an_unexpected_architecture_warns():
 def test_plain_linux_has_no_android_check():
     checks = run({}, machine="x86_64", pointer_bits=64, sys_platform="linux")
     assert "android" not in checks and "python bits" not in checks
+
+
+def test_unenforced_interpreter_memory_limit_is_a_warning():
+    checks = run({}, memory_limit_enforced=False)
+    assert checks["interpreter memory limit"].status == "warn"
+    assert "interpreter memory limit" not in run({}, memory_limit_enforced=True)

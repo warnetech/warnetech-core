@@ -38,6 +38,10 @@ MAX_CODE_CHARS = 50_000
 # Windows caps a whole command line at about 32,767 characters and the code is passed on it.
 WINDOWS_MAX_CODE_CHARS = 30_000
 _IS_WINDOWS = sys.platform == "win32"
+# Only Linux is known to stop a runaway allocation under RLIMIT_AS. On macOS the limit can be
+# accepted or refused and the allocation still succeeds (GitHub's macOS runner let a 1 GiB
+# allocation through a 256 MB limit); Windows has no such limit at all.
+MEMORY_LIMIT_ENFORCED = sys.platform.startswith("linux")
 # Not defined by subprocess on POSIX; the documented value of the Windows constant.
 _CREATE_NEW_PROCESS_GROUP = 0x00000200
 # The only parent variables a child may see. Anything else, including every
@@ -79,6 +83,11 @@ class Executor:
         self.max_output = max_output
         self.memory_mb = memory_mb
         self.allowed_languages = allowed_languages
+
+    @property
+    def memory_limit_enforced(self) -> bool:
+        """Whether ``memory_mb`` really stops a program on this platform."""
+        return MEMORY_LIMIT_ENFORCED
 
     # ---- building the child ------------------------------------------------
 
