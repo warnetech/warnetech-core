@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Warnetech</title>
+<style>
+:root{--bg:#f6f7f9;--fg:#1b1f24;--muted:#5b6570;--card:#fff;--line:#d5dae0;--accent:#1f6feb;--bad:#b42318;--ok:#157f3b}
+@media (prefers-color-scheme:dark){:root{--bg:#14171b;--fg:#e8ebee;--muted:#9aa5b1;--card:#1d2127;--line:#323943;--accent:#5aa2ff;--bad:#ff8a80;--ok:#6fd48f}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif}
+main{max-width:46rem;margin:0 auto;padding:1rem}
+h1{font-size:1.3rem;margin:.5rem 0 1rem}
+h2{font-size:1rem;margin:0 0 .5rem}
+section{background:var(--card);border:1px solid var(--line);border-radius:.6rem;padding:1rem;margin-bottom:1rem}
+.gap{margin-top:.6rem}
+label{display:block;font-size:.9rem;color:var(--muted);margin-bottom:.25rem}
+textarea,input[type=text],input[type=password]{width:100%;padding:.55rem;border:1px solid var(--line);border-radius:.4rem;background:var(--bg);color:var(--fg);font:inherit}
+textarea{min-height:6rem;resize:vertical}
+button{margin-top:.6rem;padding:.55rem 1rem;border:0;border-radius:.4rem;background:var(--accent);color:#fff;font:inherit;cursor:pointer}
+button:disabled{opacity:.5;cursor:default}
+.row{display:flex;gap:.75rem;flex-wrap:wrap}.row>div{flex:1;min-width:10rem}
+.status{margin-top:.5rem;font-size:.9rem;color:var(--muted);white-space:pre-wrap}
+.status.bad{color:var(--bad)}.status.ok{color:var(--ok)}
+#reply{white-space:pre-wrap;word-wrap:break-word;min-height:2rem}
+.meta{font-size:.85rem;color:var(--muted);margin-top:.5rem}
+details{border-top:1px solid var(--line);padding:.4rem 0}summary{cursor:pointer}
+.snippet{white-space:pre-wrap;color:var(--muted);font-size:.9rem;margin:.3rem 0 0}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+</style>
+</head>
+<body>
+<main>
+<h1>Warnetech</h1>
+
+<section id="tokenbox" hidden>
+  <label for="token">Access token (kept in this tab only, never saved)</label>
+  <input id="token" type="password" autocomplete="off">
+</section>
+
+<section>
+  <h2>Ask</h2>
+  <div class="row">
+    <div><label for="project">Memory project</label>
+    <input id="project" type="text" value="default" maxlength="64"></div>
+  </div>
+  <label for="question" class="gap">Question (Ctrl+Enter to send)</label>
+  <textarea id="question" maxlength="4000"></textarea>
+  <button id="askbtn" type="button">Ask</button>
+  <div id="askstatus" class="status" role="status"></div>
+</section>
+
+<section>
+  <h2>Add documents to memory</h2>
+  <label for="files">Text, Markdown, code, JSON or CSV files, up to 1 MB each</label>
+  <input id="files" type="file" multiple>
+  <button id="upbtn" type="button">Upload</button>
+  <div id="upstatus" class="status" role="status"></div>
+</section>
+
+<section aria-live="polite">
+  <h2>Answer</h2>
+  <div id="reply">Nothing yet.</div>
+  <div id="meta" class="meta"></div>
+  <div id="sources"></div>
+</section>
+</main>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var token = "";
+  function headers() {
+    var h = { "Content-Type": "application/json" };
+    if (token) h["Authorization"] = "Bearer " + token;
+    return h;
+  }
+  function say(el, text, kind) { el.textContent = text; el.className = "status" + (kind ? " " + kind : ""); }
+  async function post(path, body) {
+    var res = await fetch(path, { method: "POST", headers: headers(), body: JSON.stringify(body) });
+    var data = null;
+    try { data = await res.json(); } catch (e) { data = null; }
+    if (!res.ok) {
+      var detail = data && data.detail ? data.detail : res.status + " " + res.statusText;
+      throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+    }
+    return data;
+  }
+  function showSources(list) {
+    var box = $("sources");
+    box.textContent = "";
+    if (!list.length) { var none = document.createElement("div"); none.className = "meta"; none.textContent = "No sources retrieved."; box.appendChild(none); return; }
+    list.forEach(function (s) {
+      var d = document.createElement("details");
+      var sum = document.createElement("summary");
+      sum.textContent = s.source + "  (score " + s.score + ")";
+      var p = document.createElement("div");
+      p.className = "snippet";
+      p.textContent = s.text;
+      d.appendChild(sum); d.appendChild(p); box.appendChild(d);
+    });
+  }
+  async function ask() {
+    var q = $("question").value.trim();
+    if (!q) { say($("askstatus"), "Type a question first.", "bad"); return; }
+    $("askbtn").disabled = true;
+    say($("askstatus"), "Thinking...");
+    try {
+      var r = await post("/ui/api/ask", { question: q, project: $("project").value.trim() || "default" });
+      $("reply").textContent = r.text;
+      $("meta").textContent = r.model + " via " + r.provider + " | " + r.tokens + " tokens";
+      showSources(r.sources);
+      say($("askstatus"), "");
+    } catch (e) { say($("askstatus"), e.message, "bad"); }
+    $("askbtn").disabled = false;
+  }
+  async function upload() {
+    var files = $("files").files;
+    if (!files.length) { say($("upstatus"), "Choose at least one file.", "bad"); return; }
+    $("upbtn").disabled = true;
+    var lines = [], project = $("project").value.trim() || "default";
+    for (var i = 0; i < files.length; i++) {
+      var f = files[i];
+      try {
+        var r = await post("/ui/api/upload", { name: f.name, text: await f.text(), project: project });
+        lines.push("OK   " + r.name + ": " + r.chunks + " chunks");
+      } catch (e) { lines.push("FAIL " + f.name + ": " + e.message); }
+      say($("upstatus"), lines.join("\n"));
+    }
+    var failed = lines.some(function (l) { return l.indexOf("FAIL") === 0; });
+    say($("upstatus"), lines.join("\n"), failed ? "bad" : "ok");
+    $("upbtn").disabled = false;
+  }
+  $("askbtn").addEventListener("click", ask);
+  $("upbtn").addEventListener("click", upload);
+  $("token").addEventListener("input", function (e) { token = e.target.value.trim(); });
+  $("question").addEventListener("keydown", function (e) { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) ask(); });
+  fetch("/ui/api/info").then(function (r) { return r.json(); }).then(function (i) {
+    if (i.auth_required) $("tokenbox").hidden = false;
+  }).catch(function () {});
+})();
+</script>
+</body>
+</html>

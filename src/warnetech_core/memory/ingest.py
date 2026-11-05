@@ -92,6 +92,35 @@ def iter_files(root: Path, report: IngestReport) -> Iterator[Path]:
             yield path
 
 
+async def ingest_text(
+    memory: MemoryService, project: str, name: str, text: str, *, scope: str = "docs"
+) -> tuple[int, int]:
+    """Chunk and store one document under ``name``. Returns ``(chunks stored, chunks removed)``.
+
+    Idempotent: chunks are keyed ``<name>#<n>``, so storing the same name again updates in
+    place and drops chunks the new text no longer has.
+    """
+    chunks = chunk_text(text)
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+    items = [
+        {
+            "text": chunk,
+            "key": f"{name}#{i}",
+            "metadata": {"source": name, "chunk": i, "of": len(chunks), "sha": digest},
+        }
+        for i, chunk in enumerate(chunks)
+    ]
+    if items:
+        await memory.remember_many(project, items, scope=scope)
+    keep = {item["key"] for item in items}
+    removed = 0
+    for old in await memory.list(project, scope=scope, limit=10_000,
+                                 metadata_filter={"source": name}):
+        if old.key not in keep:
+            removed += await memory.forget(project, key=old.key, scope=scope)
+    return len(items), removed
+
+
 async def ingest_path(
     memory: MemoryService, project: str, target: str | Path, *, scope: str = "docs"
 ) -> IngestReport:
@@ -110,23 +139,10 @@ async def ingest_path(
         if b"\x00" in raw:
             report.skipped.append((rel, "binary"))
             continue
-        chunks = chunk_text(raw.decode("utf-8", errors="replace"))
-        digest = hashlib.sha256(raw).hexdigest()[:16]
-        items = [
-            {
-                "text": chunk,
-                "key": f"{rel}#{i}",
-                "metadata": {"source": rel, "chunk": i, "of": len(chunks), "sha": digest},
-            }
-            for i, chunk in enumerate(chunks)
-        ]
-        if items:
-            await memory.remember_many(project, items, scope=scope)
-        keep = {item["key"] for item in items}
-        for old in await memory.list(project, scope=scope, limit=10_000,
-                                     metadata_filter={"source": rel}):
-            if old.key not in keep:
-                report.removed += await memory.forget(project, key=old.key, scope=scope)
+        added, removed = await ingest_text(
+            memory, project, rel, raw.decode("utf-8", errors="replace"), scope=scope
+        )
+        report.removed += removed
         report.files += 1
-        report.chunks += len(items)
+        report.chunks += added
     return report
