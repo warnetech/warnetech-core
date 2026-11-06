@@ -1,9 +1,16 @@
-PRD research complete. Branch claude/warnetech-core-pr9-ci-m66l9m, commit 0b9a6d2 pushed.
+## Branch hygiene cleanup
 
-Pivoted from PR #9 CI check to new Android app repo. User wants separate mobile app (framework & purpose TBD). Next: ask what the app does + which framework (React Native? Kotlin native?), then scaffold new repo with GitHub Actions CI for Android APK build.
+**Done:** Merged PR #11 into main (f18ab15) — brings PR #10 + all 4 handoff commits. Pushed main to remote. Closed PR #11 on GitHub (commits already in main, no rebase needed).
 
-Uncommitted: none.
+**State:** main is now complete with all history. Default branch still points to old `claude/ai-gateway-memory-layer-g7m9ug` (stale, 15 commits behind). Three branches need deletion.
 
-Open questions: (1) Android app purpose & framework; (2) D1–D7 in warnetech-core PRD still need your call (cost tracking, memory retrieval, interpreter strategy, etc.); (3) Supabase key rotation (SEC-004).
+**Next:** 
+1. Manual on GitHub: Settings → Default branch → select `main`
+2. Delete 3 stale branches via `git push origin --delete claude/warnetech-core-agi-setup-2x0okx claude/warnetech-core-pr9-ci-m66l9m claude/ai-gateway-memory-layer-g7m9ug`
+3. Verify: `git branch -a` shows no stale refs
 
-**Autostart:** no
+**Uncommitted:** None.
+
+**Open questions:** None.
+
+**Autostart:** yes
