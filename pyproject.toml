@@ -32,11 +32,11 @@ dev = [
 ]
 
 [project.scripts]
-warnetech = "warnetech_core.cli:main"
-warnetech_memory = "warnetech_core.memory.warnetech_memory:main"
+warnetech = "warnetech-core.cli:main"
+warnetech_memory = "warnetech-core.memory.warnetech_memory:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/warnetech_core"]
+packages = ["src/warnetech-core"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
