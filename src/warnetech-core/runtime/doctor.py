@@ -106,8 +106,13 @@ def run_checks(
     machine: str | None = None,
     pointer_bits: int | None = None,
     sys_platform: str | None = None,
+    memory_limit_enforced: bool | None = None,
 ) -> list[Check]:
     env = os.environ if env is None else env
+    if memory_limit_enforced is None:
+        from ..interpreter.executor import MEMORY_LIMIT_ENFORCED
+
+        memory_limit_enforced = MEMORY_LIMIT_ENFORCED
     py = python_version or (sys.version_info.major, sys.version_info.minor)
     checks: list[Check] = []
 
@@ -136,6 +141,13 @@ def run_checks(
         add("android", "warn", f"unexpected architecture {arch!r} for 64-bit Android")
     container = detect_container(env, exists, read_text)
     add("container", "info", f"running in {container}" if container else "not in a container")
+    if not memory_limit_enforced:
+        add(
+            "interpreter memory limit",
+            "warn",
+            "not enforced on this platform (Linux only), so the interpreter refuses to run code "
+            "unless WARNETECH_ALLOW_UNENFORCED_MEMORY=1",
+        )
 
     # ---- dependencies ----
     missing = [pkg for mod, pkg in _REQUIRED.items() if find_spec(mod) is None]

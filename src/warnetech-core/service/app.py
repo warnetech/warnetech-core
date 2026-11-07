@@ -106,6 +106,17 @@ app = FastAPI(
 )
 
 
+from .webhooks import build_router as _build_webhook_router  # noqa: E402
+
+app.include_router(_build_webhook_router(get_gateway))
+
+from .warnetech_ui import build_ui_router as _build_ui_router  # noqa: E402
+
+app.include_router(
+    _build_ui_router(get_gateway, get_memory, require_token, lambda: _state.get("token"))
+)
+
+
 # ---- error translation --------------------------------------------------
 
 @app.exception_handler(AllProvidersFailed)

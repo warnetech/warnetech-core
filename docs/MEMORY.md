@@ -31,3 +31,22 @@ In `warnetech chat`: `/agents` lists them, `/delegate <agent> <task>` runs one. 
 Limits enforced in code: no nesting, 3 running at once, 8 jobs per call, a 20,000-token budget per call (jobs not yet started are skipped once it is used), and memory is read-only and opt-in per agent (`memory: true`). An agent returns text only; nothing it returns is run or saved.
 
 Delegation is manual: the chat model does not decide to delegate on its own yet, because small local models are unreliable at it.
+
+## Flat-file memory (`warnetech_memory`)
+
+A second, separate store: one append-only file, `data/rag_store.jsonl`, standard library only, keyword (BM25) search. It does not use embeddings or the SQLite store above.
+
+```bash
+warnetech_memory add "The vault code is blue." --source notes.md
+warnetech_memory search vault code
+warnetech_memory context "what is the vault code?"   # text with sources, ready for a prompt
+warnetech_memory list
+warnetech_memory delete <id>
+```
+
+- The same text added twice (ignoring case and spacing) is stored once; a second source is recorded against it.
+- Deleting writes a tombstone. The file is never edited, so a deleted note is still in it.
+- Unreadable lines are skipped and counted on stderr, never fatal. Exit codes: 0 ok, 1 nothing found, 2 bad input.
+- Path: `--store`, else `WARNETECH_RAG_STORE_PATH`, else `data/rag_store.jsonl` under the nearest folder with `pyproject.toml`.
+- Earlier prototype files (`created_at` and `text` only) still load.
+- Measured here: loading 10,000 records and searching them took 0.21 s. Search reads the whole file each time, so a very large store will be slower.
