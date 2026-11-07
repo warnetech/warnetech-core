@@ -36,7 +36,7 @@ warnetech = "warnetech-core.cli:main"
 warnetech_memory = "warnetech-core.memory.warnetech_memory:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/warnetech-core"]
+packages = ["src/warnetech_core"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
