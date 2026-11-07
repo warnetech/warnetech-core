@@ -7,7 +7,7 @@ name = "warnetech-core"
 version = "0.1.0"
 description = "Shared AI gateway and memory/context layer for Warnetech projects."
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.8,<4.0"
 license = { text = "MIT" }
 dependencies = [
     "httpx>=0.24",
