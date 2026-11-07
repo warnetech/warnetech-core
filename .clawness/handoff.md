@@ -1,28 +1,20 @@
-# Handoff — Package rename in progress
+# Handoff — Package rename + Python constraint
 
-**Done this session:**
+**Done:**
 - Renamed `src/warnetech_core/` → `src/warnetech-core/`
-- Updated pyproject.toml: script entry points, packages path (lines 35-36, 39)
+- Updated pyproject.toml scripts & packages
+- Committed (3978a89)
+
+**BLOCKER:** User on Python 3.8.10. Warnetech-core requires 3.10+.
+- Must upgrade Python to proceed
 
 **Still needed:**
-1. Update all imports in codebase: `from warnetech_core` → `from warnetech-core` and `import warnetech_core` → `import warnetech-core`
-2. Update test files similarly
-3. Update CLI references in docs/README
-4. Test: `python -m warnetech-core ask "test"`
-5. Commit and push
-
-**Files to update imports:**
-- `src/warnetech-core/**/*.py` (every file with `warnetech_core` import)
-- `tests/**/*.py`
-- `core/engine.py`, scripts, examples
-- `warnetech.sh`, `warnetech.bat`
-
-**Uncommitted:** 
-- Directory rename
-- pyproject.toml updates
+1. Update all imports: `warnetech_core` → `warnetech-core` (all .py files, tests, scripts)
+2. Test: `python -m warnetech-core ask "test"`
+3. Research task: clarify app scope (purpose, features, users)
 
 **Open questions:**
-- Python version: 3.10+ or 3.8.10?
-- App scope: what are you building? (for research task)
+- Will user upgrade Python to 3.10+?
+- What app is being built? (for research)
 
 **Autostart:** no
