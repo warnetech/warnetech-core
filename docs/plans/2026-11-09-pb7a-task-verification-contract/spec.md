@@ -1,6 +1,6 @@
 # PB-7A Task Verification Contract — Specification
 
-**Status:** PROPOSED. Implementation NOT APPROVED. Decisions D1–D15 await approval.
+**Status:** SPEC UNDER REVIEW / IMPLEMENTATION BLOCKED. D4, D6 and D10 amended (§36); final approval pending.
 **Blocks:** PB-7 Execution Verification (`docs/plans/2026-11-09-pb7-execution-verification/spec.md`, SPEC APPROVED / IMPLEMENTATION BLOCKED).
 **Scope of this document:** specification only. No production code, planner code, tests, persistence, or telemetry change.
 
@@ -524,3 +524,198 @@ PB-7 spec D1 (absent contract → UNCERTAIN) is unchanged by this proposal. PB-7
 ## 35. Next decision
 
 Approval of D1–D16, with particular attention to **D4** (reduced allowlist), **D10** (malformed-contract option A or B), and **D16** (pydantic model). After approval, the next step is the PB-7A implementation specification's test-first plan. Implementation does not start until that approval.
+
+---
+
+## 36. PB-7A final decision amendments (D4, D6, D10)
+
+Specification only. No production code, tests, planner, `TaskNode`, persistence or telemetry changed.
+
+**PB-7 status:** SPEC APPROVED / IMPLEMENTATION BLOCKED BY PB-7A.
+**PB-7A status:** SPEC UNDER REVIEW / IMPLEMENTATION BLOCKED.
+
+### 36.1 Updated decision table
+
+| ID | Decision | Status |
+|----|----------|--------|
+| D1 | Structured typed `TaskVerificationContract` | APPROVED |
+| D2 | Optional contract; backwards compatible | APPROVED |
+| D3 | Missing or empty usable contract → PB-7 UNCERTAIN / `no_verification_contract` | APPROVED |
+| D4 | Initial check kinds (amended) | AMENDED. `execution_success` APPROVED; `result_present` APPROVED; `required_field`, `equals`, `non_empty`, `result_type` **DEFERRED** (§36.2). |
+| D5 | AND-only composition | APPROVED |
+| D6 | Bounded check count (amended) | AMENDED. Hard maximum APPROVED. Exact value **derived in §36.3 as 2**. Silent truncation FORBIDDEN. |
+| D7 | Single-level field references | APPROVED for PB-7B only, subject to result-model compatibility. **Moot for PB-7A** (no field references). |
+| D8 | Bounded safe scalar expected values | APPROVED for PB-7B only, subject to repository value/string bounds. **Moot for PB-7A.** |
+| D9 | Executable verifier logic | FORBIDDEN (approved) |
+| D10 | Malformed contract handling (amended) | AMENDED (§36.4). Explicit malformed contract → planning/parsing failure. Missing → `None`. Explicit empty → no usable contract. Malformed must not become UNCERTAIN. |
+| D11 | No persistent schema change | APPROVED. Inspection confirms no migration (§31.2). |
+| D12 | `Goal.success_criteria` remains free-form context | APPROVED |
+
+### 36.2 D4 inspection report
+
+Governing finding: the execution result that a task holds is a string. `TaskNode.result: str | None` (`planning.py:43`), set at `orchestrator.py:288` to `reflection.revised_output or output_text`. `output_text` is `reasoning.conclusion`, plus `"Tool output: {last_tool.output}"` when the last tool succeeded and its output is truthy (`orchestrator.py:229-234`). That is the only structured-to-string conversion, and it discards structure. The structured value exists only as `ToolResult.output: Any` (`tools.py:63`), set from the handler's return (`tools.py:129-135`). Handler return types are unconstrained: each tool defines its own output shape.
+
+**execution_success — APPROVE.** Declarative. PB-7 evaluates it from PB-6 terminal-failure semantics. No result-shape dependency.
+
+**result_present — APPROVE.** Definition: `TaskNode.result` is a string, and `result.strip() != ""`. `None` and whitespace-only fail. Supported by the current model with no new state.
+
+**required_field — DEFER.**
+- Supported by current result model: NO.
+- Evidence: the task holds a string, so no field exists. The structured `ToolResult.output` is `Any`, and each handler chooses its shape (`tools.py:129`), so a field check would need tool-specific extraction code. That violates the D4 conditions.
+- Implementation complexity: high. Needs either a structured per-task result record (new state, with persistence question) or a per-tool adapter.
+- Recommended: DEFER to PB-7B.
+
+**equals — DEFER.**
+- Supported: NO, for the same reason. Comparing a field to a scalar requires field access on `Any` output.
+- Expected scalar types if later approved: `None`, `bool`, `int`, finite `float`, bounded `str` (D8).
+- Recommended: DEFER to PB-7B.
+
+**non_empty — DEFER.**
+- Whole-result form: supported, but identical to `result_present`. Adding it adds no capability.
+- Field form: NO, same as `required_field`.
+- Supported value types for the whole-result form: `str` only.
+- Recommended: DEFER. Do not add a redundant kind.
+
+**result_type — DEFER.**
+- Supported on the task result: effectively meaningless. `TaskNode.result` is always `str` or `None`, so only the `string` type is reachable.
+- Supported on `ToolResult.output`: technically possible with an `isinstance` check against allowlisted types, but `ToolResult` is not attached to the task and is not in the verifier's input path today.
+- Safe allowlisted types if later approved: `str`, `int`, `float`, `bool`, `dict`, `list`. No class paths.
+- Recommended: DEFER to PB-7B, with the structured result record.
+
+**D4 final:** PB-7A allowlist = `{execution_success, result_present}`. Every conditional kind fails the D4 condition "supported by the current result model without tool-specific verifier code". None is approved now.
+
+**Unknown kinds** remain rejected (§21, D10). No tool-specific kinds (`file_exists`, `http_status`, `database_row_exists`, `command_succeeds`, `process_running`, `service_available`) are added.
+
+### 36.3 D6 inspection report
+
+**Existing relevant bounds:**
+- Planner output token cap: `max_tokens=2048` for the entire plan response (`planning.py`, `decompose`). This bounds total plan size, not per-task checks.
+- Planner task count: no explicit cap in code.
+- Orchestrator: `max_cycles=20`, `max_retries_per_task=2` (`orchestrator.py:86-87`). These bound execution, not contract size.
+- Service text bounds: `MAX_QUESTION_CHARS = 4000`, `MAX_UPLOAD_CHARS = 1_000_000` (`service/warnetech_ui.py:32-33`). These are the only string/collection bounds on untrusted input in the repository.
+- Gateway fallback bound: `max_fallbacks=3`.
+- No existing per-collection cap on planner-produced lists (`depends_on`, `tool_hint`, `estimated_seconds` are unbounded).
+
+**Typical planned task shape:** the planner emits `title, description, depends_on, tool_hint, estimated_seconds`. Test fixtures use 1–3 tasks. No fixture contains verification material.
+
+**Typical verification-condition need:** a task needs at most one condition per allowed kind, because the checks are boolean, AND-combined, and every PB-7A kind is a single property of one task result.
+
+**Existing schema/list precedent:** none for a per-task check list.
+
+**Derivation:** with AND-only composition and two boolean kinds, a conjunction can contain each kind at most once. Duplicate kinds add no information. Therefore the maximum number of meaningful distinct checks equals the size of the allowlist.
+
+**Recommended:** `MAX_VERIFICATION_CHECKS = len(VerificationCheckKind) = 2`, defined once, centrally, as a derived constant rather than a literal. Duplicate kinds are rejected. The overall contract is rejected if it exceeds `MAX_VERIFICATION_CHECKS` distinct checks, which cannot occur for PB-7A but is enforced for when PB-7B adds kinds.
+
+**Why this value:** it is derived from the allowlist, not chosen. It rejects duplicates rather than truncating. It rises only through a new specification that adds kinds. The 8 previously proposed had no evidence behind it.
+
+**Overflow behaviour:** the contract is rejected under D10. Never truncated, never sliced, never randomly selected. Duplicate kinds count as overflow.
+
+**Relation to the 2048-token plan cap:** a two-check contract adds a bounded amount to plan size (each check is one small JSON object), so the plan-level cap is not affected.
+
+### 36.4 D10 inspection report
+
+**Existing planner-domain exception:** NONE. `errors.py` defines `WarnetechError` (base), `ConfigError`, `ProviderError` and subclasses, `RateLimitError`, `TimeoutError_`, `AllProvidersFailed`, `ModelNotRegistered`, `PromptNotFound`, `PromptRenderError`, `MemoryError_`. None describes planner or task output.
+
+**Parser validation path today:** `_parse_tasks` (`planning.py`) logs and returns `[]` for invalid JSON or a non-list. It drops non-dict entries. It keeps `tool_hint` only if it is a `str`. It never raises.
+
+**Malformed planner output behaviour today:** silent degradation. Bad JSON yields an empty plan. `orchestrator.run` (line 141) calls `decompose` with no guard. An empty plan ends the goal as failed (`orchestrator.py:143-150`).
+
+**Other AGI validation convention:** `outcome.py` raises `ValueError` for an invalid confidence (strict validation, no clamping). `tool_metrics.py` raises `ValueError` for invalid prior pseudo-counts and negative latency. So AGI validation of invalid input uses `ValueError`.
+
+**Recommended exception for an invalid verification contract:** `ValueError`, following the AGI convention in `outcome.py` and `tool_metrics.py`. Raised from the contract parser, with a message naming the task and reason.
+
+**Error message format:** `"invalid verification contract for task <task_id>: <reason>"`, where `<reason>` is a fixed code from a closed set: `unknown_kind`, `duplicate_kind`, `too_many_checks`, `unknown_key`, `wrong_type`, `not_a_mapping`. The message must not include the raw planner text, the model response, prompts, or any credential-bearing content (§10 of the original spec, and D10 safety rule).
+
+**Does this require a new exception:** NO. `ValueError` is the narrowest accurate existing type, and `WarnetechError` is too broad.
+
+**Consequence the approver must accept:** `decompose` would now raise `ValueError` for a malformed explicit contract, and `orchestrator.run` does not catch it. Two effects follow:
+1. The goal aborts before any execution, which is the requested behaviour.
+2. `run` has already recorded the goal as `"running"` (`orchestrator.py:131`) and does not record a terminal status on exception. The goal record would stay `running`. Choosing between (a) catching the `ValueError` in `run` and recording `"failed"`, and (b) leaving it uncaught, is a decision (D10-a below). Recommended: (a), a narrow `except ValueError` around `decompose` that records `"failed"` and re-raises or returns a failed result. This is an orchestrator change and must be specified and approved before PB-7A implementation.
+
+**Absent versus malformed:** `verification` absent or `null` → `None` (no failure). `checks: []` explicitly → `None` with no failure (D3). Any other invalid material → `ValueError` (planning failure).
+
+### 36.5 Consequence of D10 on D3
+
+D3 is unchanged: a usable-contract absence still yields PB-7 UNCERTAIN. An explicit empty contract is treated as absence, not as malformed. This is the only exception to the fail-closed rule, and it cannot yield PASS.
+
+### 36.6 Final approval gate
+
+PB-7A becomes ready for implementation only when:
+
+- [ ] D1 approved
+- [ ] D2 approved
+- [ ] D3 approved
+- [ ] D4 final allowlist approved: `execution_success`, `result_present`; other four deferred
+- [ ] D5 approved
+- [ ] D6 exact maximum approved: `MAX_VERIFICATION_CHECKS = 2`, derived; duplicates rejected
+- [ ] D7 confirmed against result models (moot for PB-7A; deferred to PB-7B)
+- [ ] D8 confirmed against value/string bounds (moot for PB-7A; deferred to PB-7B)
+- [ ] D9 approved
+- [ ] D10 approved: `ValueError`, fail at planning, closed reason codes, no raw content
+- [ ] D10-a approved: orchestrator behaviour on `ValueError` from `decompose` (recommended: catch, record `failed`)
+- [ ] D11 confirmed: no schema migration
+- [ ] D12 approved
+
+Inspection:
+
+- [x] TaskNode inspected
+- [x] planner prompt inspected
+- [x] planner output format inspected
+- [x] parser inspected
+- [x] planner-domain errors inspected (none exists)
+- [x] planner tests inspected
+- [x] execution-result models inspected
+- [x] serialisation inspected
+- [x] persistence impact inspected
+- [ ] backward compatibility confirmed by approval
+
+### 36.7 Report
+
+```text
+PB-7A status: SPEC UNDER REVIEW / IMPLEMENTATION BLOCKED
+PB-7 status:  SPEC APPROVED / IMPLEMENTATION BLOCKED BY PB-7A
+
+D4 final recommendation:
+  execution_success: APPROVE
+  result_present:    APPROVE
+  required_field:    DEFER
+  equals:            DEFER
+  non_empty:         DEFER
+  result_type:       DEFER
+
+D6:
+  Existing bounds found: planner max_tokens=2048; orchestrator max_cycles=20,
+    max_retries_per_task=2; service MAX_QUESTION_CHARS=4000, MAX_UPLOAD_CHARS=1_000_000.
+    No per-task check precedent.
+  Recommended maximum: MAX_VERIFICATION_CHECKS = 2 (derived = allowlist size)
+  Evidence: AND-only + boolean kinds => each kind at most once.
+  Overflow behaviour: reject as planning failure. Never truncate.
+
+D10:
+  Existing planner exception: none
+  Selected error behaviour: raise ValueError from contract parser; decompose propagates
+  New exception needed: NO
+  Open consequence: orchestrator.run leaves goal recorded as "running" on uncaught error (D10-a)
+
+TaskNode findings:        pydantic, no verification field, metadata unused, result is str
+Planner prompt findings:  four keys; verification = one-sentence addition
+Parser findings:          log-and-degrade today; ValueError path would be new
+Planner test findings:    16 tests; raw-string fixtures; no verification fixtures
+Execution-result findings: ToolResult.output Any, not attached to task; task result is str
+Serialisation findings:   none of TaskNode/Plan/Goal serialised
+Persistence findings:     no schema impact
+Backward-compatibility:   absent key -> None; legacy fixtures unchanged; run() behaviour
+                          changes only for malformed explicit contracts (new)
+
+Production code changed: NO
+Tests changed:           NO
+Persistent schema changed: NO
+Working tree: spec change only, pending commit
+Branch: ccr-2ddd16bf-wsxi86 (upstream origin/ccr-2ddd16bf-wsxi86)
+
+PB-7A ready for final approval: NO (approval of D4, D6, D10, D10-a required; then final gate)
+Remaining blockers:
+  - D10-a orchestrator behaviour on ValueError
+  - D7/D8 remain PB-7B items; their moot status for PB-7A needs confirmation
+  - No string-size bound convention for planner text beyond service constants; not needed in PB-7A
+```
