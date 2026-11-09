@@ -1,5 +1,41 @@
 # Warnetech-Core AGI Expansion Roadmap
 
+## Status (Phase 1 complete)
+
+This document is the long-range vision. The status below records what shipped
+on `ccr-2ddd16bf-wsxi86`; the sections after it are unchanged design notes.
+
+**Shipped in Phase 1**
+
+- Planner duplicate-title fix: dependencies resolve correctly when two tasks share a title.
+- `Goal.id`: stable id on every goal, used to correlate telemetry.
+- Capability metadata: `CapabilityRegistry` with dependency validation. Stored on the
+  orchestrator but not yet read by the run loop.
+- Confidence scoring: a heuristic run-level score (`OrchestratorResult.confidence`).
+  It is not a per-memory score, so it does not implement section 3's memory framework.
+- Telemetry: opt-in JSONL event sink, with five events from the orchestrator.
+- Integration tests: scripted-gateway tests for the no-telemetry baseline, event order,
+  tool selection, retries, and confidence values.
+
+**Not in Phase 1**
+
+- Memory confidence per memory record (section 3).
+- Reading capability metadata during tool selection (section 1, section 9).
+- Persistent state (section 4) and reflection persistence.
+
+## Phase 2 candidates (placeholder, not started)
+
+- State store
+- Reflection persistence
+- Goal history
+- Tool metrics
+- Bayesian tool ranking
+- Adaptive tool selection
+
+Note: the priority list below puts Reflection Engine, Persistent Agent State and
+Autonomous Tool Selection in Phase 2. The list above follows a later proposal.
+Reconcile the two before Phase 2 planning starts.
+
 ## Executive Summary
 
 The next stage of development for `warnetech/warnetech-core` should focus on transforming the AGI layer from a collection of intelligent components into a structured autonomous reasoning system. Rather than simply adding more agents, prompts, or AI wrappers, the platform should gain stronger capabilities in planning, memory integrity, self-reflection, world modelling, and multi-agent collaboration.

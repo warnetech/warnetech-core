@@ -42,8 +42,68 @@ asyncio.run(main())
 ```
 
 `AGIOrchestrator(gateway, memory=None, *, tool_registry=None, model="chat.default",
-project="agi", max_cycles=20, max_retries_per_task=2)`. Pass a `MemoryService` to
-give each task recent context and to store each completed result.
+project="agi", max_cycles=20, max_retries_per_task=2, telemetry=None,
+capabilities=None)`. Pass a `MemoryService` to give each task recent context and
+to store each completed result.
+
+## Results
+
+`OrchestratorResult` fields:
+
+| Field | Meaning |
+|---|---|
+| `goal`, `plan`, `cycles` | As before. `cycles` holds one `CycleRecord` per attempt. |
+| `success`, `summary`, `total_ms` | As before. Summary text is unchanged. |
+| `confidence` | Heuristic in [0, 1], or `None` if no run started (the planner gave no tasks). |
+
+Confidence starts at 0.50 and adds 0.05 per evidence item (up to +0.35), then
+subtracts 0.10 per contradiction. Evidence is successful tool results plus
+completed tasks whose reflection had no critiques. Contradictions are critiques
+with severity `error` or `critical`, counted across every cycle. The score is
+computed once, at the end of the run. It is a heuristic, not a calibrated
+probability.
+
+## Telemetry
+
+Telemetry is off unless you pass a sink:
+
+```python
+from pathlib import Path
+from warnetech_core.agi import AGIOrchestrator
+from warnetech_core.agi.telemetry import Telemetry
+
+orchestrator = AGIOrchestrator(gateway, telemetry=Telemetry(Path("agi-events.jsonl")))
+```
+
+Each line is one JSON object with `goal_id`, `event`, `timestamp` (UTC) and
+`payload`. Events are emitted in this order for a run:
+
+| Event | When | Payload |
+|---|---|---|
+| `goal_received` | Start of run | `success_criteria` (count) |
+| `plan_generated` | After planning | `task_count` |
+| `tool_selected` | A `tool_hint` resolved to a registered tool | `cycle`, `task_id`, `tool_name` |
+| `reflection_completed` | After each cycle's reflection | `cycle`, `task_id`, `critiques`, `should_retry`, `has_errors` |
+| `execution_completed` | End of run, including the empty-plan case | `success`, `cycles`, `confidence` |
+
+Payloads carry counts and ids, not goal text or model output. Write failures are
+logged and swallowed, so a broken sink never fails a run.
+
+## Execution flow
+
+```text
+Goal ─► Planning ─► (per ready task)
+                     ├─ Memory context (optional)
+                     ├─ Reasoning
+                     ├─ Tool execution (only if tool_hint resolves)
+                     ├─ Reflection
+                     └─ Retry / fail / complete
+                   ─► Confidence scoring (once, at run end)
+                   ─► Execution summary + telemetry
+```
+
+Telemetry events are emitted at the points named in the table above. Capability
+metadata is stored on the orchestrator but the loop does not consult it yet.
 
 ## How a run works
 
@@ -114,4 +174,6 @@ pytest tests/test_agi_*.py
 ```
 
 All AGI tests run offline with scripted gateways. `test_agi_hardening.py` covers
-the malformed-output cases and the retry and failure paths.
+the malformed-output cases and the retry and failure paths. `test_agi_integration.py`
+covers the no-telemetry baseline, telemetry event order, tool selection, and the
+confidence values for known runs.
