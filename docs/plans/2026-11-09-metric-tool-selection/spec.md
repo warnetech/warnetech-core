@@ -1,5 +1,5 @@
 ---
-status: proposed, implementation blocked
+status: implemented / closed
 baseline: bf904c2
 ---
 
@@ -87,3 +87,14 @@ This needs its own approval, because it adds a field to the tool model.
 - Candidate sabotage checks (each restored, not committed): tag matching -> 2 red; None matches None -> 3 red; ignore explicit group -> 2 red; drop hinted tool -> 4 red. Gate: candidate review closed pending final ranking spec review.
 - Candidate review gate: real `workspace_read`/`run_code` regression added (`test_real_workspace_read_does_not_pick_up_run_code`). Sabotage to tag matching turns both shared-tag regressions red. Pending: review of real non-null groups (none assigned yet).
 - Groups are not assigned to any production tool yet. Each assignment needs a semantic review.
+
+
+## Closure record
+
+- Implementation: `fffaf6b`. Candidate layer: `aa453fd`. Real-registration regression: `3efb80e`.
+- Validation: 1039 passed, 2 skipped, lint clean.
+- Default off. Requires `enable_phase2=True` and `state_dir`.
+- Only explicit `selection_group` candidates participate. Tags never do.
+- Metrics are attributed to the tool that actually executed. `tool_selected` reports the winner, and adds `selection_mode` only when the flag is on.
+- No production selection groups exist, so no production tool substitution occurs. Assigning groups is a separate decision requiring semantic review.
+- Not implemented, by design: automatic retry, automatic failover, reflection-based ranking, random exploration, production group auto-assignment.
