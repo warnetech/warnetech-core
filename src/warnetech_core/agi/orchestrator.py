@@ -158,6 +158,9 @@ class AGIOrchestrator:
 
         plan.status = PlanStatus.IN_PROGRESS
         retries: dict[str, int] = {}
+        # Selection runs once per task. A retry reuses that decision, so retry cannot
+        # become tool failover. See docs/plans/2026-11-09-pb4-retry-selection-stability.
+        selections: dict[str, tuple[str | None, str, list[str], str]] = {}
 
         for cycle_num in range(1, self.max_cycles + 1):
             ready = plan.ready_tasks()
@@ -194,9 +197,9 @@ class AGIOrchestrator:
             )
             record.reasoning = reasoning
 
-            selected_name, selection_mode, candidate_names, selection_reason = (
-                self._select_tool_name(task)
-            )
+            if task.id not in selections:
+                selections[task.id] = self._select_tool_name(task)
+            selected_name, selection_mode, candidate_names, selection_reason = selections[task.id]
             if selected_name is not None:
                 tool_call = ToolCall(
                     tool_name=selected_name,
