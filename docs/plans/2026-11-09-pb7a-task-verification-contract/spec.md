@@ -1,6 +1,6 @@
 # PB-7A Task Verification Contract — Specification
 
-**Status:** APPROVED FOR TESTS-FIRST IMPLEMENTATION (§37). PB-7 remains blocked until PB-7A is implemented and closed.
+**Status:** CLOSED (see closure.md). Implemented at the closure commit.
 **Blocks:** PB-7 Execution Verification (`docs/plans/2026-11-09-pb7-execution-verification/spec.md`, SPEC APPROVED / IMPLEMENTATION BLOCKED).
 **Scope of this document:** specification only. No production code, planner code, tests, persistence, or telemetry change.
 

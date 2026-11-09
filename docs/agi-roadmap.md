@@ -99,9 +99,9 @@ Target progression: observe, plan, select, execute, verify, reflect, remember, a
 
 Separate tool execution from task satisfaction: tool result, then verification, then reflection, then outcome. Verification answers whether the task was satisfied, not whether a tool returned. Spec: `docs/plans/2026-11-09-pb7-execution-verification/spec.md` (approved at `d5ee6f6`). It does not retry, fail over, select tools, change ToolMetrics, or alter the schema. Blocker: tasks have no structured verification contract, so every task would return UNCERTAIN.
 
-### PB-7A Task Verification Contract (PROPOSED; NOT APPROVED)
+### PB-7A Task Verification Contract (CLOSED)
 
-A typed, bounded, allowlisted contract on `TaskNode` describing what must be true for a task to verify. Initial allowlist: `execution_success` and `result_present`. Field-level checks are deferred to PB-7B because `TaskNode.result` is a string and no structured per-task result exists. Documentation only. No planner, model, persistence, or telemetry change. Spec: `docs/plans/2026-11-09-pb7a-task-verification-contract/spec.md`. Decisions D1–D16 await approval.
+A typed, bounded, allowlisted contract on `TaskNode` describing what must be true for a task to verify. Initial allowlist: `execution_success` and `result_present`. Field-level checks are deferred to PB-7B because `TaskNode.result` is a string and no structured per-task result exists. Documentation only. No planner, model, persistence, or telemetry change. Spec: `docs/plans/2026-11-09-pb7a-task-verification-contract/spec.md`. Implemented and closed: `docs/plans/2026-11-09-pb7a-task-verification-contract/closure.md`. PB-7 verification remains unimplemented.
 
 ### PB-8 AGI Evaluation Harness
 

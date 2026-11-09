@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 
 from ..gateway import AIGateway
 from ._coerce import strip_code_fence
+from .verification import TaskVerificationContract, parse_verification
 
 log = logging.getLogger("warnetech.agi.planning")
 
@@ -43,6 +44,7 @@ class TaskNode(BaseModel):
     estimated_seconds: float | None = None
     result: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+    verification: TaskVerificationContract | None = None
 
     @property
     def is_ready(self) -> bool:
@@ -188,11 +190,14 @@ class Planner:
         title_to_ids: dict[str, list[str]] = {}
 
         for raw in entries:
+            title = str(raw.get("title") or "untitled")
             node = TaskNode(
-                title=str(raw.get("title") or "untitled"),
+                title=title,
                 description=str(raw.get("description") or ""),
                 tool_hint=raw["tool_hint"] if isinstance(raw.get("tool_hint"), str) else None,
                 estimated_seconds=_seconds(raw.get("estimated_seconds")),
+                # Malformed explicit contracts raise ValueError (PB-7A D10).
+                verification=parse_verification(raw.get("verification"), title),
             )
             title_to_ids.setdefault(node.title, []).append(node.id)
             nodes.append(node)

@@ -138,7 +138,14 @@ class AGIOrchestrator:
             goal.id,
             {"success_criteria": len(goal.success_criteria)},
         )
-        plan = await self.planner.decompose(goal)
+        try:
+            plan = await self.planner.decompose(goal)
+        except ValueError:
+            # Planning failed (e.g. malformed verification contract): leave no goal
+            # recorded as running. The original error still propagates (PB-7A D10-a).
+            self._persist(goal.id, "goal_store",
+                          lambda: self.goal_store.record_goal(goal.id, goal.description, "failed"))
+            raise
         self._emit(TelemetryEvent.PLAN_GENERATED, goal.id, {"task_count": len(plan.tasks)})
         if not plan.tasks:
             self._emit(

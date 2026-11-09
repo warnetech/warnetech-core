@@ -9,16 +9,16 @@ from __future__ import annotations
 import json
 
 import pytest
+
+from warnetech_core.agi.orchestrator import AGIOrchestrator
+from warnetech_core.agi.planning import Goal, Planner, TaskNode
+from warnetech_core.agi.state import AgentStateStore
 from warnetech_core.agi.verification import (
     MAX_VERIFICATION_CHECKS,
     TaskVerificationContract,
     VerificationCheck,
     VerificationCheckKind,
 )
-
-from warnetech_core.agi.orchestrator import AGIOrchestrator
-from warnetech_core.agi.planning import Goal, Planner, TaskNode
-from warnetech_core.agi.state import AgentStateStore
 
 
 def _parse(raw: object):
