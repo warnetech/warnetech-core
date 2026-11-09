@@ -27,6 +27,8 @@ class ToolDefinition(BaseModel):
     parameters: dict[str, Any] = Field(default_factory=dict)
     required_params: list[str] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
+    version: str = "1.0.0"
+    dependencies: list[str] = Field(default_factory=list)
 
     def format_for_llm(self) -> dict[str, Any]:
         """Return the schema in the format expected by tool-use prompts."""
