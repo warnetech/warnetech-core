@@ -45,7 +45,7 @@ Completed:
 Deliberately not done:
 
 - Metric-informed tool selection is opt-in (`enable_metric_selection=True`, off by default). It ranks only explicit `selection_group` candidates. Production selection groups are none, so no production tool is substituted.
-- Known gap: a retry re-runs tool selection and can execute a different candidate. This is tracked as PB-4 and is not approved failover.
+- Retries reuse the tool selected for the task. They do not re-run selection, so they are not failover (PB-4). Automatic failover is not implemented.
 - `OutcomeAnalysis` is not persisted. It is derived from the persisted reflection.
 
 Plan: `docs/plans/2026-11-09-phase-2/plan.md`.

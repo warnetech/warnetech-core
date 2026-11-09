@@ -119,7 +119,9 @@ metadata is stored on the orchestrator but the loop does not consult it yet.
      output to the reasoning conclusion.
    - Reflect on the output against the success criteria.
 3. **Decide.** A low score or `should_retry` sends the task back, up to
-   `max_retries_per_task`. Current behaviour: the retry re-runs tool selection, so with metric selection on, a retry can execute a different candidate than the failed attempt. Retry-selection stability is a known gap, tracked as PB-4. The intended contract is that a retry keeps the tool selected for the original attempt. After that, a critical or error-level critique fails
+   `max_retries_per_task`. Tool selection runs once per task. A retry reuses
+   that selected tool, even if the failed attempt changed the metrics. A retry
+   never becomes a different tool, so there is no automatic failover. After that, a critical or error-level critique fails
    the task; otherwise it completes with the reflector's revised output if it
    gave one.
 4. **Stop** when every task is complete, a task fails (its dependents never
