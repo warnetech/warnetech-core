@@ -182,7 +182,9 @@ class Planner:
         # Keep only object entries, so the nodes and their raw dicts stay index-aligned.
         entries = [raw for raw in raw_tasks if isinstance(raw, dict)]
         nodes: list[TaskNode] = []
-        title_to_id: dict[str, str] = {}
+        # A title can repeat. A dependency on it waits for every task with that title,
+        # so it never runs before one of its inputs.
+        title_to_ids: dict[str, list[str]] = {}
 
         for raw in entries:
             node = TaskNode(
@@ -191,16 +193,21 @@ class Planner:
                 tool_hint=raw["tool_hint"] if isinstance(raw.get("tool_hint"), str) else None,
                 estimated_seconds=_seconds(raw.get("estimated_seconds")),
             )
-            title_to_id[node.title] = node.id
+            title_to_ids.setdefault(node.title, []).append(node.id)
             nodes.append(node)
 
         for raw, node in zip(entries, nodes, strict=True):
             deps = raw.get("depends_on")
             if not isinstance(deps, list):
                 continue
-            node.depends_on = [
-                title_to_id[d] for d in deps if isinstance(d, str) and d in title_to_id
-            ]
+            resolved: list[str] = []
+            for dep_title in deps:
+                if not isinstance(dep_title, str):
+                    continue
+                for dep_id in title_to_ids.get(dep_title, []):
+                    if dep_id not in resolved:
+                        resolved.append(dep_id)
+            node.depends_on = resolved
 
         return nodes
 

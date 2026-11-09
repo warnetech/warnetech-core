@@ -103,3 +103,17 @@ class TestPlanner:
         tasks = planner._parse_tasks(raw)
         assert len(tasks) == 1
         assert tasks[0].title == "X"
+
+    def test_duplicate_title_dependency_waits_for_every_match(self):
+        planner = Planner.__new__(Planner)
+        raw = json.dumps(
+            [
+                {"title": "Fetch", "description": "source one", "depends_on": []},
+                {"title": "Fetch", "description": "source two", "depends_on": []},
+                {"title": "Report", "description": "combine", "depends_on": ["Fetch"]},
+            ]
+        )
+        tasks = planner._parse_tasks(raw)
+        fetch_ids = [t.id for t in tasks if t.title == "Fetch"]
+        report = next(t for t in tasks if t.title == "Report")
+        assert report.depends_on == fetch_ids
