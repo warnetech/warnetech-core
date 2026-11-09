@@ -153,3 +153,16 @@ Outcome A: reuse the existing `success` field. No `execution_status` is added. N
 ## Test order
 
 The regression tests were written before the production change, and the terminal-failure regressions were confirmed red before the fix (4 red, 4 green controls). They live in `tests/test_agi_terminal_tool_failure.py`.
+
+## Test matrix status (verified against 2226e8c)
+
+Run in a temporary worktree at `2226e8c` with that worktree's `src` on the path:
+
+- RED (4): terminal failure is success; reflection lacks failure context; executed tool not named; `execution_completed` reports success.
+- GREEN controls (4): exception message excluded; recovered failure succeeds; no new attempt; no failover.
+
+Added after the fix as controls:
+- Recovered run's reflection has no terminal-failure context. Sabotage (terminal condition removed) turns it red.
+- Terminal failure adds exactly one ToolMetrics failure, the attempt's own.
+
+Not sabotaged separately: the ToolMetrics duplicate control.

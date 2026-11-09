@@ -231,3 +231,47 @@ async def test_execution_completed_reports_terminal_failure(tmp_path):
     done = [e for e in events if e["event"] == "execution_completed"]
     assert len(done) == 1
     assert done[0]["payload"]["success"] is False
+
+
+# GUARD (plan B1): a recovered task's reflection never receives terminal-failure context.
+
+
+async def test_successful_retry_is_not_marked_as_terminal_tool_failure():
+    attempts = {"n": 0}
+
+    async def flaky(**_kwargs):
+        attempts["n"] += 1
+        if attempts["n"] == 1:
+            raise RuntimeError("transient")
+        return "ok"
+
+    gw = _Gateway([RETRY, CLEAN])
+    orch = AGIOrchestrator(
+        gw,  # type: ignore[arg-type]
+        tool_registry=_tool_registry([], {"hint": flaky}),
+    )
+
+    await orch.run(Goal(id="tf-9", description="x"))
+
+    assert gw.reflect_inputs
+    assert not any("Tool failed:" in text for text in gw.reflect_inputs)
+
+
+# GUARD (plan E2): a terminal failure adds exactly one ToolMetrics failure, the attempt's own.
+
+
+async def test_terminal_failure_does_not_duplicate_tool_metrics(tmp_path):
+    state = tmp_path / "state"
+    gw = _Gateway([CLEAN])
+    orch = AGIOrchestrator(
+        gw,  # type: ignore[arg-type]
+        tool_registry=_tool_registry([], {"hint": _always_raise}),
+        enable_phase2=True,
+        state_dir=state,
+    )
+
+    await orch.run(Goal(id="tf-10", description="x"))
+
+    reloaded = ToolMetrics.load(state / "tool_metrics.json")
+    assert reloaded.stats("hint").failures == 1
+    assert reloaded.stats("hint").successes == 0
