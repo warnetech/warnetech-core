@@ -15,6 +15,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
+from .state import StateError
+
 
 class ToolStats(BaseModel):
     """Raw counters for one tool."""
@@ -124,7 +126,10 @@ class ToolMetrics:
         metrics = cls(prior_alpha=prior_alpha, prior_beta=prior_beta)
         if not path.exists():
             return metrics
-        data = json.loads(path.read_text(encoding="utf-8"))
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise StateError(f"corrupt tool metrics file: {path}") from exc
         for name, raw in data.items():
             metrics._stats[name] = ToolStats(**raw)
         return metrics

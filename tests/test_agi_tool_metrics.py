@@ -122,3 +122,12 @@ def test_save_and_load_round_trip(tmp_path):
 def test_load_missing_file_returns_empty_metrics(tmp_path):
     loaded = ToolMetrics.load(tmp_path / "absent.json")
     assert loaded.tools() == []
+
+
+def test_load_corrupt_file_raises_state_error(tmp_path):
+    from warnetech_core.agi.state import StateError
+
+    path = tmp_path / "metrics.json"
+    path.write_text("{not json", encoding="utf-8")
+    with pytest.raises(StateError):
+        ToolMetrics.load(path)
