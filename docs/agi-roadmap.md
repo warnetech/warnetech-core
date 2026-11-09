@@ -59,7 +59,7 @@ Durable records stay tracked: `.clawness/memory.md`, `.clawness/changelog.json`,
 
 ## Current AGI Baseline
 
-Baseline: `5e805d4`
+Baseline: `162762a`
 
 Status:
 - Phase 1: closed
@@ -70,8 +70,10 @@ Status:
 - PB-2 production selection-group governance: closed
 - PB-3 execution identity audit: closed
 - PB-4 retry selection stability: closed
+- PB-5 runtime resilience audit: closed
+- PB-6 terminal tool failure semantics: closed (spec `8285db0`)
 
-Validation: 1052 passed, 2 skipped, lint clean.
+Validation: 1062 passed, 2 skipped. `ruff check src tests` clean. Four pre-existing Ruff findings remain outside src/tests (examples/, scripts/, vendor/).
 
 Runtime policy:
 - Metric-informed selection remains off by default.
@@ -84,6 +86,89 @@ Runtime policy:
 Governance:
 - Any future production `selection_group` assignment requires review through the PB-2 framework (`docs/plans/2026-11-09-pb2-selection-group-review/framework.md`).
 - Any behaviour that automatically changes the executing tool after an execution failure is automatic failover. It requires a separate approved specification. It is not unfinished PB-4 work.
+
+## Post-PB-6 Controlled Autonomy Roadmap
+
+Do not reopen closed contracts without a new specification: selection_group semantics, resolve_candidates(), ToolMetrics ranking, cold-start and tie behaviour, the metric-selection default, retry eligibility and limits, same-tool retry, terminal-failure semantics, the persistent schema, OutcomeAnalysis, and reflection failure confidentiality.
+
+Each step that increases runtime authority follows this path: specification, acceptance criteria, tests, implementation, sabotage checks, independent review, closure baseline.
+
+Target progression: observe, plan, select, execute, verify, reflect, remember, adapt, evaluate. Authority increases gradually. Unrestricted autonomy is out of scope.
+
+### PB-7 Execution Verification (next, PROPOSED)
+
+Separate tool execution from task satisfaction: tool result, then verification, then reflection, then outcome. Verification answers whether the task was satisfied, not whether a tool returned. Spec: `docs/plans/2026-11-09-pb7-execution-verification/spec.md`. It does not retry, fail over, select tools, change ToolMetrics, or alter the schema.
+
+### PB-8 AGI Evaluation Harness
+
+Measurable, interpretable benchmarks, grouped PLAN-, SELECT-, EXEC-, VERIFY-, REFLECT-, OUTCOME-, STATE-, RECOVERY- and SAFETY-. No single "AGI score". Results live in test or evaluation artefacts, never in runtime agent memory.
+
+### PB-9 Goal and Plan Lifecycle
+
+Explicit goal states: CREATED, PLANNED, EXECUTING, VERIFYING, REFLECTING, COMPLETED, FAILED, BLOCKED. Keep task, goal, persistence and verification failure distinct. Plans are versioned (plan_id, plan_version, goal_id, supersedes_plan). An active plan is never mutated silently.
+
+### PB-10 Durable Episodic Experience
+
+Remember bounded execution experience across runs: goal class, executed tool, verification result, outcome, timestamp, context identifiers. Never store chain-of-thought, hidden reasoning, credentials, raw exception messages or full prompt histories. Keep FACT, EXPERIENCE, METRIC and REFLECTION as separate stores.
+
+### PB-11 Evidence and Belief Model
+
+Distinguish observed evidence, derived conclusions and uncertain hypotheses. Every durable belief traces to evidence references: external source, execution evidence, verified state, or another recorded source. A model's statement is not a fact.
+
+### PB-12 Production Tool Substitution Pilot
+
+After PB-7 and PB-8. At most one narrowly reviewed production selection group, using the PB-2 framework. Tools must be genuinely interchangeable. The workspace_read/run_code class of error must stay impossible.
+
+### PB-13 Adaptive Selection Policy
+
+Only after real production metrics and the evaluation harness exist. Each new ranking signal defines meaning, range, source, cold-start and missing-data behaviour, weight, tie effect, persistence and tests. Avoid redundant signals.
+
+### PB-14 Explicit Tool Failover Policy
+
+Automatic failover stays NOT IMPLEMENTED until this slice specifies: eligible and ineligible failures, candidate exclusion, attempt limits, retry ordering, side-effect handling, partial success, ToolMetrics, telemetry, verification and restart behaviour. Classify operations as READ_ONLY, IDEMPOTENT_MUTATION, NON_IDEMPOTENT_MUTATION or UNKNOWN. UNKNOWN means no automatic failover.
+
+### PB-15 Long-Horizon Goal Execution
+
+Goals survive several plan, execute, verify and reflect cycles, each bounded. Budgets cover cycles, tool executions, retries, plan revisions, elapsed time, model calls and cost. Exhausting a budget yields BLOCKED or INCOMPLETE, never unbounded execution.
+
+### PB-16 Multi-Agent / Multi-Ghost Coordination
+
+Late. Needs verification, evaluation, goal lifecycle, evidence model, experience model, bounded autonomy and conflict semantics first. Consensus is not majority vote. Consider provenance, source independence, verification status, confidence and contradictions. Every claim keeps its provenance.
+
+### PB-17 Autonomy Safety and Release Gate
+
+Required before any broad autonomous release. Reviews candidate authority, tool privilege, side effects, retry, failover, persistence, data exposure, telemetry, goal loops, budget enforcement, rollback and evaluation results. No feature bypasses this gate because its tests pass.
+
+### Security principles
+
+- Historical success is not execution authority.
+- An LLM recommendation is not execution authority.
+- A shared tag is not substitution authority.
+- Authority comes from explicit contracts, approved candidate boundaries, tool permissions and verified policy.
+
+### Tool privilege model (future, not implemented)
+
+Conceptual categories: READ, WRITE, EXECUTE, NETWORK, ADMIN, EXTERNAL_MUTATION. Selection and failover must never silently escalate privilege.
+
+### Telemetry direction (future, each event needs its own schema review)
+
+goal_received, plan_generated, tool_selected, execution_completed, verification_completed, reflection_completed, outcome_completed, goal_completed, goal_failed.
+
+### State migration policy
+
+Persistent state stays versioned. No silent schema semantic change. A future incompatible change needs a new specification, migration tests, then the new version. Missing or unknown versions are never treated as current.
+
+### Release governance
+
+Each behaviour-changing slice: PROPOSED, APPROVED, TESTS-FIRST, IMPLEMENTED, INDEPENDENT REVIEW, CLOSED. Record baseline, implementation and closure commits, tests, skips, lint, known limitations and deferred behaviour. Authority-sensitive slices get a read-only GitHub Copilot CLI review. Copilot does not modify files.
+
+### Repository quality track
+
+Create MAINT-1 (Repository-wide Ruff cleanup) only if the four findings matter. Do not mix it into AGI behaviour slices.
+
+### Order of work
+
+PB-7, PB-8, PB-9, PB-10, PB-11, PB-12, PB-13, PB-14, PB-15, PB-16, PB-17. PB-14, PB-15 and PB-16 do not start before PB-7 and PB-8 are closed.
 
 ## Executive Summary
 
