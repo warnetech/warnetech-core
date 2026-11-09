@@ -80,7 +80,10 @@ This needs its own approval, because it adds a field to the tool model.
 ## Status
 
 - Candidate layer: **implemented** in `aa453fd` (`ToolDefinition.selection_group` default `None`, `agi/candidates.py:resolve_candidates`). Tests in `tests/test_agi_candidates.py`. Tag-based discovery is rejected.
-- Ranking wired into runtime selection: **blocked**. It needs a final approval of the ranking acceptance criteria above, updated to use `selection_group`. Runtime selection is unchanged.
+- Ranking wired into runtime selection: **implemented, opt-in** (`enable_metric_selection=True`, which requires `enable_phase2=True` and `state_dir`). Tests: `tests/test_agi_metric_selection.py`. Off by default, so runtime selection is unchanged.
+- Ranking picks among `resolve_candidates()` output with `pick_candidate()`. Ties keep candidate order, so the hint wins.
+- Outcomes are recorded for the tool that actually ran, not the hint.
+- `tool_selected` adds `selection_mode` only when the flag is on.
 - Candidate sabotage checks (each restored, not committed): tag matching -> 2 red; None matches None -> 3 red; ignore explicit group -> 2 red; drop hinted tool -> 4 red. Gate: candidate review closed pending final ranking spec review.
 - Candidate review gate: real `workspace_read`/`run_code` regression added (`test_real_workspace_read_does_not_pick_up_run_code`). Sabotage to tag matching turns both shared-tag regressions red. Pending: review of real non-null groups (none assigned yet).
 - Groups are not assigned to any production tool yet. Each assignment needs a semantic review.

@@ -28,7 +28,7 @@ Runtime limits:
 
 Plan: `docs/plans/2026-11-09-phase-2/plan.md`. Closed: outcome analysis (P2-2), schema-versioned persistence and restart recovery (P2-4), opt-in integration and persistence-failure isolation (P2-7). `ToolMetrics` records and ranks tool outcomes (P2-6 infrastructure).
 
-- Runtime tool selection does **not** use `ToolMetrics` ranking. This is intentional. Metric-driven selection changes which tool runs and needs a separate approved specification.
+- Runtime tool selection uses `ToolMetrics` ranking only when `enable_metric_selection=True` (also requires `enable_phase2=True` and `state_dir`). Candidates come from explicit `ToolDefinition.selection_group`, never from tags. Off by default.
 - `OutcomeAnalysis` is not persisted.
 - Phase 2 persistence is off unless `enable_phase2=True` and `state_dir` are both passed.
 

@@ -7,7 +7,12 @@ tool metadata only and never reads ToolMetrics.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from .tools import ToolDefinition, ToolRegistry
+
+if TYPE_CHECKING:
+    from .tool_metrics import ToolMetrics
 
 
 def resolve_candidates(tool_hint: str, registry: ToolRegistry) -> list[ToolDefinition]:
@@ -31,3 +36,20 @@ def resolve_candidates(tool_hint: str, registry: ToolRegistry) -> list[ToolDefin
         if tool.name != hinted.name and tool.selection_group == hinted.selection_group
     ]
     return [hinted, *alternatives]
+
+
+def pick_candidate(candidates: list[ToolDefinition], metrics: ToolMetrics) -> ToolDefinition:
+    """Return the candidate with the highest posterior mean. Ties keep candidate order.
+
+    Ranking only orders candidates that resolve_candidates() already approved.
+    It never adds one. Reads metrics, does not write them.
+    """
+    if not candidates:
+        raise ValueError("no candidates to pick from")
+    best = candidates[0]
+    best_mean = metrics.posterior_mean(best.name)
+    for candidate in candidates[1:]:
+        mean = metrics.posterior_mean(candidate.name)
+        if mean > best_mean:
+            best, best_mean = candidate, mean
+    return best

@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from ..gateway import AIGateway
 from ..memory.service import MemoryService
+from .candidates import pick_candidate, resolve_candidates
 from .capability_registry import CapabilityRegistry
 from .confidence import ConfidenceScorer
 from .planning import Goal, Plan, Planner, PlanStatus
@@ -88,6 +89,7 @@ class AGIOrchestrator:
         capabilities: CapabilityRegistry | None = None,
         enable_phase2: bool = False,
         state_dir: Path | None = None,
+        enable_metric_selection: bool = False,
     ) -> None:
         self.gateway = gateway
         self.memory = memory
@@ -113,6 +115,12 @@ class AGIOrchestrator:
             raise ValueError("enable_phase2=True requires state_dir")
         if not enable_phase2 and self._state_dir is not None:
             raise ValueError("state_dir given without enable_phase2=True")
+        # Metric selection needs the persisted ToolMetrics, so it requires Phase 2 state.
+        if enable_metric_selection and not enable_phase2:
+            raise ValueError(
+                "enable_metric_selection=True requires enable_phase2=True and state_dir"
+            )
+        self._metric_selection = enable_metric_selection
         if enable_phase2:
             self.goal_store = AgentStateStore(self._state_dir)
             self.reflection_history = ReflectionHistory(self._state_dir)
@@ -186,23 +194,28 @@ class AGIOrchestrator:
             )
             record.reasoning = reasoning
 
-            if task.tool_hint and self.tools.get(task.tool_hint):
+            selected_name, selection_mode = self._select_tool_name(task)
+            if selected_name is not None:
                 tool_call = ToolCall(
-                    tool_name=task.tool_hint,
+                    tool_name=selected_name,
                     arguments={"task": task.title, "description": task.description},
                 )
-                self._emit(
-                    TelemetryEvent.TOOL_SELECTED,
-                    goal.id,
-                    {"cycle": cycle_num, "task_id": task.id, "tool_name": task.tool_hint},
-                )
+                selected_payload: dict[str, Any] = {
+                    "cycle": cycle_num,
+                    "task_id": task.id,
+                    "tool_name": selected_name,
+                }
+                # Only metric-enabled runs add the field, so the default payload is unchanged.
+                if self._metric_selection:
+                    selected_payload["selection_mode"] = selection_mode
+                self._emit(TelemetryEvent.TOOL_SELECTED, goal.id, selected_payload)
                 call_started = time.perf_counter()
                 tool_result = await self.tools.execute(tool_call)
                 record.tool_results.append(tool_result)
                 elapsed_ms = (time.perf_counter() - call_started) * 1000
                 if self._phase2:
                     self._persist(goal.id, "tool_metrics", self.tool_metrics.record,
-                                  task.tool_hint, success=tool_result.success,
+                                  tool_call.tool_name, success=tool_result.success,
                                   latency_ms=elapsed_ms)
 
             output_text = reasoning.conclusion
@@ -292,6 +305,23 @@ class AGIOrchestrator:
             total_ms=total_ms,
             confidence=confidence,
         )
+
+    def _select_tool_name(self, task: Any) -> tuple[str | None, str]:
+        """Pick the tool to execute for *task*. Returns (name or None, selection mode).
+
+        Disabled: the hint, as before. Enabled: the hint's candidates are ranked by
+        ToolMetrics. Ranking can only pick among candidates that resolve_candidates() approved.
+        """
+        hint = task.tool_hint
+        if not hint or not self.tools.get(hint):
+            return None, "default"
+        if not self._metric_selection:
+            return hint, "default"
+        candidates = resolve_candidates(hint, self.tools)
+        if len(candidates) <= 1:
+            return hint, "default"
+        winner = pick_candidate(candidates, self.tool_metrics)
+        return winner.name, "metrics"
 
     def _persist(
         self,
