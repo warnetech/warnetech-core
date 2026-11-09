@@ -1,43 +1,81 @@
 ---
-status: done
+status: draft
 ---
 
 # AGI Phase 2 plan
 
-Source: `docs/agi-roadmap.md` (Phase 2 headings) and the placeholder list in its status section.
-Numbering confirmed by the user on 2026-11-09.
+Source: `docs/agi-roadmap.md` (Phase 2 headings). Phase 1 closed at `c792a55`.
 
-## Scope (this pass)
+**Gate:** Phase 2 modules `state.py` and `tool_metrics.py` were committed (`fc2dfa3`) before this plan was agreed. They are not called from `AGIOrchestrator`. Wiring them in is blocked until this plan is approved.
 
-| Group | Item | Module | Status |
+## Objectives
+
+1. Reflections and goal outcomes survive a process restart.
+2. Tool choice uses measured outcomes, with a cold-start prior.
+3. Existing Phase 1 behaviour is unchanged unless a flag is set.
+
+## Task numbering
+
+| ID | Area | Task | Status |
 |---|---|---|---|
-| Reflection Engine | Reflection history | `agi/state.py` (`ReflectionHistory`) | build |
-| Persistent State | State store | `agi/state.py` (`AgentStateStore`) | build |
-| Persistent State | Goal history | `agi/state.py` (`AgentStateStore.record_goal`) | build |
-| Tool Selection | Tool metrics | `agi/tool_metrics.py` (`ToolMetrics`) | build |
-| Tool Selection | Bayesian ranking | `agi/tool_metrics.py` (`rank`) | build |
-| Tool Selection | Adaptive selection | `agi/tool_metrics.py` (`choose`, Thompson sampling) | build |
+| P2-1 | Reflection Engine | Reflection history store | built (`ReflectionHistory`) |
+| P2-2 | Reflection Engine | Outcome analysis: derive success and retry signal from `ReflectionResult` | not started |
+| P2-3 | Persistent State | State store: goal history | built (`AgentStateStore`) |
+| P2-4 | Persistent State | Reflection persistence and restart recovery | not started |
+| P2-5 | Tool Selection | Tool metrics store | built (`ToolMetrics`) |
+| P2-6 | Tool Selection | Beta(1, 1) ranking and Thompson selection | built (`ToolMetrics`) |
+| P2-7 | Integration | Opt-in wiring into `AGIOrchestrator` behind a constructor flag | not started, needs approval |
 
-## Design decisions
+## Component boundaries
 
-- Stdlib only (CLAUDE.md rule 4). JSON files under a caller-supplied root directory, written atomically (temp file + `os.replace`).
-- No network, no model calls. Both modules are pure and offline-testable.
-- Bayesian ranking uses a Beta(1, 1) prior by default: posterior mean = (successes + a) / (trials + a + b).
-- Adaptive selection uses Thompson sampling over the same Beta posteriors. The RNG is injectable so tests are deterministic.
-- Nothing is wired into `AGIOrchestrator` yet. Wiring is a separate step, so the Phase 1 run loop and its 954 tests stay untouched.
+- `agi/state.py` owns durable records (goals, reflections). It does not decide anything.
+- `agi/tool_metrics.py` owns outcome counts. It ranks and chooses, but does not execute.
+- `telemetry.py` stays an event log. It is not a state store.
+- `reflection.py` is extended, not replaced. P2-2 adds analysis helpers beside `Reflector`.
+- `tools.py` remains the only executor.
 
-## Deferred to the wiring step
+## Data models
 
-- Calling `AgentStateStore` and `ToolMetrics` from `AGIOrchestrator` (run loop unchanged in this pass).
+- `GoalRecord`: `goal_id`, `description`, `status`, `timestamp` (UTC ISO 8601).
+- `ReflectionRecord`: `goal_id`, `overall_quality` in [0, 1], `should_retry`, `critique_count`, `timestamp`.
+- Tool metrics file: `{tool_name: {successes, failures, total_latency_ms}}`.
+- Files: `<state_dir>/goals.json`, `<state_dir>/reflections.json`, `<state_dir>/tool_metrics.json`. No schema version field yet. P2-4 adds one.
 
-## Out of scope (later phases)
+## Acceptance criteria
 
-- Orchestrator integration of the store and tool selection.
-- Beliefs, plans and memories files from roadmap section 4.
+- AC1: Writes are atomic. A crash mid-write leaves the previous file intact. (Test exists: no temp files left behind.)
+- AC2: Corrupt JSON raises `StateError`. It is never silently treated as empty. (Test exists.)
+- AC3: Values outside their declared range are rejected. (Tests exist.)
+- AC4: An untried tool scores 0.50. (Test exists.)
+- AC5: With the flag off, `AGIOrchestrator` output and telemetry are identical to Phase 1. (Not written.)
+- AC6: With the flag on, one run writes one goal record and one reflection record. (Not written.)
+- AC7: After a restart, the store reloads prior records and ranking reflects them. (Not written.)
+
+## Failure behaviour
+
+- State directory missing: created on first write.
+- State directory unwritable: the write raises. The orchestrator must catch it, emit a telemetry event, and continue the run without persistence. (Not decided: which event name. Proposed: reuse `execution_completed` with an error field, not a new event name.)
+- Corrupt state file: `StateError`. The operator must repair or move the file. No automatic reset.
+- Concurrent writers: not supported. One process per state directory. Documented, not enforced.
+
+## Migration
+
+- None for Phase 1 users. Persistence is off by default.
+- P2-4 introduces `schema_version: 1` before any production data is written.
+
+## Tests
+
+- Unit: `tests/test_agi_state.py`, `tests/test_agi_tool_metrics.py` (present).
+- Integration: scripted-gateway run with the flag on and off, asserting AC5 and AC6 (to write in P2-7).
+- Restart: write, drop the objects, reload, assert AC7 (to write in P2-4).
+
+## Out of scope
+
+- Beliefs, memories, and plans files from roadmap section 4.
+- Composite ranking that combines latency or confidence (see the redundant-weighting note in `docs/agi-roadmap.md`).
 - World model, multi-ghost coordination, evaluation harness (Phases 3 and 4).
 
 ## Verification
 
-- `pytest tests/test_agi_state.py tests/test_agi_tool_metrics.py`
-- `pytest` (full suite, expect 954 + new tests passing)
+- `python -m pytest -q` (full suite)
 - `ruff check src tests`
