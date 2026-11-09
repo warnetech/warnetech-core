@@ -24,18 +24,15 @@ Runtime limits:
 - Canonical events: `goal_received`, `plan_generated`, `tool_selected`, `execution_completed`, `reflection_completed`, and `persistence_failed` (added in Phase 2).
 - Phase 1 kept no state between runs. Phase 2 persistence is off unless `enable_phase2=True` and `state_dir` are both passed.
 
-## Phase 2: in progress
+## Phase 2: closed
 
-Plan: `docs/plans/2026-11-09-phase-2/plan.md`.
+Plan: `docs/plans/2026-11-09-phase-2/plan.md`. Closed: outcome analysis (P2-2), schema-versioned persistence and restart recovery (P2-4), opt-in integration and persistence-failure isolation (P2-7). `ToolMetrics` records and ranks tool outcomes (P2-6 infrastructure).
 
-Wired into `AGIOrchestrator` behind `enable_phase2=True, state_dir=...` (off by default):
+- Runtime tool selection does **not** use `ToolMetrics` ranking. This is intentional. Metric-driven selection changes which tool runs and needs a separate approved specification.
+- `OutcomeAnalysis` is not persisted.
+- Phase 2 persistence is off unless `enable_phase2=True` and `state_dir` are both passed.
 
-- `state.py`: `AgentStateStore` (goal history) and `ReflectionHistory`. JSON files, atomic writes, each stamped `schema_version: 1`. Unversioned or unknown-version files raise `StateError`.
-- `tool_metrics.py`: `ToolMetrics`. Beta(1, 1) posterior ranking and Thompson-sampling selection. An untried tool scores 0.50.
-
-- `outcome.py`: `analyze_outcome(reflection)` returns `OutcomeAnalysis` (success, retry recommendation, confidence, reason). Analysis only: nothing acts on the retry flag yet.
-
-Ranking and selection are recorded but not yet used to choose tools. That needs its own approval.
+No further Phase 2 production work is approved.
 
 ## Repository state
 

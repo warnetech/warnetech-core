@@ -1,6 +1,6 @@
 # Warnetech-Core AGI Expansion Roadmap
 
-## Status (Phase 1 closed, Phase 2 in progress)
+## Status (Phase 1 closed, Phase 2 closed)
 
 This document is the long-range vision. The status below records what shipped on
 `ccr-2ddd16bf-wsxi86`. Sections after it are design notes; where they conflict with
@@ -31,36 +31,21 @@ Runtime behaviour that the docs must not overstate:
 Phase 1 has no persistent reflection history, goal history, tool-performance history or
 state store.
 
-### Phase 2 (in progress)
+### Phase 2 (closed)
 
-Scope is the three Phase 2 headings from the priority list below, with the placeholder
-items placed under them:
+**Status: CLOSED.** No approved Phase 2 production work remains.
 
-```text
-Phase 2
-|
-+-- Reflection Engine
-|   +-- Reflection history
-|   +-- Reflection improvements, outcome analysis, retry recommendations (not started)
-|
-+-- Persistent State
-|   +-- State store
-|   +-- Goal history
-|   +-- Reflection persistence, restart recovery (not started)
-|
-+-- Tool Selection
-    +-- Tool metrics
-    +-- Bayesian (Laplace) prior and ranking
-    +-- Adaptive selection
-```
+Completed:
 
-Built so far, in `agi/state.py` and `agi/tool_metrics.py`. Not yet called from
-`AGIOrchestrator`:
+- Outcome analysis (`agi/outcome.py`, P2-2): `success`, `retry` recommendation, `confidence`, `reason`. Analysis only. Confidence comes from `overall_quality` and is validated strictly.
+- Schema-versioned persistence (P2-4): goals, reflections and tool metrics are written as `schema_version: 1`. Missing or unknown versions raise `StateError`. Reflection and goal restart recovery is tested.
+- Tool outcome metrics (P2-6 infrastructure): `ToolMetrics` records outcomes and ranks tools with a Beta(1, 1) prior.
+- Opt-in integration (P2-7): `AGIOrchestrator(enable_phase2=True, state_dir=...)`. Off by default. Persistence failures emit `persistence_failed` and do not fail the run.
 
-- `AgentStateStore`: goal history in `goals.json`, written atomically.
-- `ReflectionHistory`: reflection summaries in `reflections.json`.
-- `ToolMetrics`: per-tool outcome counts, Beta-posterior ranking, Thompson-sampling
-  selection. An untried tool scores 0.5 under the default Beta(1, 1) prior.
+Deliberately not done:
+
+- Runtime tool selection does not use `ToolMetrics` ranking. A tool that executes is still chosen by the existing rules. Metric-driven or adaptive selection changes which tool runs, so it needs its own approved specification first.
+- `OutcomeAnalysis` is not persisted. It is derived from the persisted reflection.
 
 Plan: `docs/plans/2026-11-09-phase-2/plan.md`.
 
