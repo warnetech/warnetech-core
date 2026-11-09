@@ -29,6 +29,9 @@ class ToolDefinition(BaseModel):
     tags: list[str] = Field(default_factory=list)
     version: str = "1.0.0"
     dependencies: list[str] = Field(default_factory=list)
+    # Explicit owner-declared substitution group. None means no alternatives.
+    # Tags are never used for substitution.
+    selection_group: str | None = None
 
     def format_for_llm(self) -> dict[str, Any]:
         """Return the schema in the format expected by tool-use prompts."""
