@@ -250,7 +250,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--no-save", action="store_true", help="do not remember this conversation")
     p.set_defaults(func=cmd_chat)
 
-    p = sub.add_parser("doctor", help="check whether this environment can run warnetech-core")
+    p = sub.add_parser("doctor", help="check whether this environment can run warnetech_core")
     p.add_argument("--json", action="store_true", help="machine-readable output")
     p.add_argument("--network", action="store_true", help="also ask the configured Ollama hosts")
     p.set_defaults(func=cmd_doctor)

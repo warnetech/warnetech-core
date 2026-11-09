@@ -5,7 +5,7 @@ Implements the Model Context Protocol handshake (``initialize`` /
 (``tools/call``).  The transport is newline-delimited JSON on stdin/stdout,
 which is what MCP clients expect for a stdio-based server.
 
-Zero external dependencies — only stdlib + warnetech-core.
+Zero external dependencies — only stdlib + warnetech_core.
 """
 
 from __future__ import annotations

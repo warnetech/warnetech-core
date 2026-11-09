@@ -13,7 +13,7 @@ Every function in that module accepts an ``embed_fn`` for exactly this reason:
 
 :func:`make_embed_fn` returns one backed by the gateway, which means real
 embeddings *plus* the retry, fallback, rate limiting and per-project cost
-attribution that the rest of warnetech-core provides. Nothing in the AI
+attribution that the rest of warnetech_core provides. Nothing in the AI
 controller changes:
 
     from warnetech_core import AIGateway

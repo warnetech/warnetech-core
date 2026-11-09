@@ -88,7 +88,7 @@ def run_aicli(args: list[str], *, timeout: float = 120.0) -> subprocess.Complete
     is passed through. Arguments are a list and no shell is used.
 
     Raises :class:`ConfigError` on Python older than 3.11, which aicli does not support;
-    the rest of warnetech-core still runs on 3.10.
+    the rest of warnetech_core still runs on 3.10.
     """
     if tuple(sys.version_info[:2]) < AICLI_MIN_PYTHON:
         have = ".".join(str(n) for n in sys.version_info[:2])

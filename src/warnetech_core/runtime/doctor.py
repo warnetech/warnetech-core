@@ -1,4 +1,4 @@
-"""`warnetech doctor`: report whether this environment can run warnetech-core.
+"""`warnetech doctor`: report whether this environment can run warnetech_core.
 
 Each check is a pure function of what it is given, so the logic is testable without
 the real machine. The report names things (provider names, proxy host, file paths)

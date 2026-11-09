@@ -1,4 +1,4 @@
-"""AGI capabilities for warnetech-core.
+"""AGI capabilities for warnetech_core.
 
 Composable building blocks that layer on top of the AI gateway and memory
 service to produce autonomous, goal-directed behaviour:
