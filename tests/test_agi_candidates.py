@@ -96,3 +96,31 @@ def test_unknown_hint_returns_no_candidates():
 def test_empty_hint_returns_no_candidates():
     registry = _registry(ToolDefinition(name="a", selection_group="g"))
     assert resolve_candidates("", registry) == []
+
+
+# Real-registration regression: the production tools that exposed the shared-tag problem.
+
+
+def test_real_workspace_read_does_not_pick_up_run_code(tmp_path):
+    from warnetech_core.interpreter import Executor
+    from warnetech_core.interpreter.agent_tools import register_interpreter_tools
+    from warnetech_core.interpreter.workspace import Workspace
+
+    workspace = Workspace(tmp_path)
+    registry = ToolRegistry()
+    # run_code registers only with both an executor and an approver. The approver is
+    # never called here: candidate resolution must not run any code.
+    names = register_interpreter_tools(
+        registry,
+        workspace,
+        executor=Executor(workspace),
+        approver=lambda _action: True,
+    )
+
+    assert "workspace_read" in names
+    assert "run_code" in names
+    # Both real tools carry the shared "interpreter" tag.
+    assert "interpreter" in registry.get("workspace_read").tags
+    assert "interpreter" in registry.get("run_code").tags
+
+    assert _names(resolve_candidates("workspace_read", registry)) == ["workspace_read"]
