@@ -102,3 +102,54 @@ Automatic failover. Retry eligibility changes. Persistence changes. Ranking chan
 ## Validation
 
 1060 passed, 2 skipped, lint clean.
+
+## Decisions as approved
+
+- D1 recovered failure: approved. An intermediate failure followed by an approved retry that succeeds may end the run as successful. The failed attempt stays in the records and ToolMetrics.
+- D2 no new retry: approved. Retry policy is unchanged. A terminal tool failure is never converted into another attempt.
+- D3 telemetry: amended. Prefer an existing equivalent field over a new one. Outcome: reuse existing `success`. See the inspection below.
+- D4 reflection wording: approved as `Tool failed: <tool> (<ErrorClass>)`. The exception message is excluded.
+- D5 LLM scope: approved. The only new LLM-facing content is the terminal-failure line in reflection.
+
+## Existing telemetry status inspection
+
+### Current `execution_completed` payload
+
+- End of run (`orchestrator.py`, final emit): `success` (bool), `cycles` (int), `confidence` (float).
+- Empty plan (`orchestrator.py`, early return): `success` false, `cycles` 0, `confidence` null.
+
+### Existing status-like fields
+
+- `success` is the only status-like field. It means the run's plan completed. There is no `status`, `outcome`, `result` or `error` field on this event.
+- `tool_selected` carries `tool_name` and, when metric selection is on, `selection_mode`, `hinted_tool`, `candidate_tools`, `selection_reason`. These describe selection, not completion.
+
+### Emitters
+
+- `orchestrator.py` `run()`: the empty-plan early return, and the end-of-run emit.
+
+### Consumers inside the repository
+
+- `tests/test_agi_telemetry.py`: checks the event name and the canonical event list.
+- `tests/test_agi_integration.py`: checks event names and order.
+- `tests/test_agi_phase2_wiring.py`: checks event names.
+- `tests/test_agi_terminal_tool_failure.py`: reads `success` from the payload.
+- `docs/AGI.md`: documents `success`, `cycles`, `confidence`.
+- No consumer in the repository asserts exact payload equality or a fixed field set. No external consumer is visible from this repository.
+
+### Compatibility assessment
+
+Reusing `success` requires no new field. Its value now reflects the terminal result, which is what the event has always claimed to report.
+
+### Decision
+
+Outcome A: reuse the existing `success` field. No `execution_status` is added. No new event is added. PB6-AC11 is met by `success`.
+
+## Known gaps (recorded, not changed)
+
+- The exception message still reaches the existing `log.error` in `tools.py`. Logs are outside the telemetry and reflection scope of PB-6.
+- A terminal tool failure costs one extra reflection call.
+- Error class names are not in telemetry. Only `success` is. This is deliberate: the approved telemetry contract needed no more.
+
+## Test order
+
+The regression tests were written before the production change, and the terminal-failure regressions were confirmed red before the fix (4 red, 4 green controls). They live in `tests/test_agi_terminal_tool_failure.py`.
