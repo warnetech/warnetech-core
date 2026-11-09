@@ -17,6 +17,14 @@ on `ccr-2ddd16bf-wsxi86`; the sections after it are unchanged design notes.
 - Integration tests: scripted-gateway tests for the no-telemetry baseline, event order,
   tool selection, retries, and confidence values.
 
+**Phase 2 (built, not yet wired into the orchestrator)**
+
+- `agi/state.py`: `AgentStateStore` (goal history, JSON, atomic writes) and
+  `ReflectionHistory`.
+- `agi/tool_metrics.py`: `ToolMetrics` with Beta-posterior ranking and Thompson
+  sampling for adaptive selection.
+- Tests: `tests/test_agi_state.py`, `tests/test_agi_tool_metrics.py`.
+
 **Not in Phase 1**
 
 - Memory confidence per memory record (section 3).
@@ -32,9 +40,10 @@ on `ccr-2ddd16bf-wsxi86`; the sections after it are unchanged design notes.
 - Bayesian tool ranking
 - Adaptive tool selection
 
-Note: the priority list below puts Reflection Engine, Persistent Agent State and
-Autonomous Tool Selection in Phase 2. The list above follows a later proposal.
-Reconcile the two before Phase 2 planning starts.
+Phase 2 scope was confirmed on 2026-11-09 as the list above, grouped under the
+priority-list headings: Reflection Engine (reflection history), Persistent State
+(state store, goal history), Tool Selection (tool metrics, Bayesian ranking,
+adaptive selection). Plan: `docs/plans/2026-11-09-phase-2/plan.md`.
 
 ## Executive Summary
 
