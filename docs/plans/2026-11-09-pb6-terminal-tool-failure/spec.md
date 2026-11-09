@@ -1,5 +1,5 @@
 ---
-status: proposed, implementation blocked until open decisions are approved
+status: approved and implemented (D1, D2, D4, D5; D3 amended to reuse existing execution_completed.success)
 baseline: 1b3ff16
 source: PB-5 PB5-F001, PB5-F002, PB5-F006, PB5-F011
 ---
@@ -71,3 +71,34 @@ This changes outcome semantics. It is implemented only after this spec is approv
 ## Not in this slice
 
 Automatic failover. Retry eligibility changes. Persistence changes. Ranking changes. Production selection groups.
+
+
+## Implementation record
+
+- `tools.py`: `ToolResult.error_type` (exception class name, set when a handler raises). Not persisted.
+- `orchestrator.py`: after the reflection, if the attempt's tool failed and no retry follows (existing retry rule), the reflection is re-run with `Tool failed: <tool> (<ErrorClass>)` appended. If that reflection still has no errors, an `ERROR` critique with the same line is added, so `has_errors` is true and the existing branch fails the task.
+- Retry rules, retry counts, selection, ToolMetrics and persistence are unchanged.
+- D3: `execution_completed.success` already exists and now reports the terminal result. No new field or event.
+
+## Known costs and boundaries
+
+- A terminal tool failure costs one extra reflection call. This only happens on that path.
+- `tools.py` still logs the exception message at error level (`log.error`). That is existing behaviour, outside PB-6's telemetry and reflection scope, and is a follow-up item.
+
+## Tests
+
+`tests/test_agi_terminal_tool_failure.py` (8 tests). Red before the change: terminal failure is not success, reflection receives the failure, executed tool is named, and execution-completed reports failure (4). Green controls: exception-message exclusion, recovered failure succeeds, no new attempt, no failover (4).
+
+## Sabotage (each restored, not committed)
+
+- TF1 remove the terminal reflection path: 4 failed
+- TF2 include the exception message: 3 failed
+- TF3 treat an intermediate failure as terminal: 1 failed
+- TF4 retry on tool failure: 3 failed
+- TF5 attribute the failure to the hint: 1 failed
+- TF6 failover after terminal failure: not run as a separate sabotage. Covered by the no-failover control and the PB-4 reselection sabotage.
+- TF7 report success regardless of terminal failure: 2 failed
+
+## Validation
+
+1060 passed, 2 skipped, lint clean.
