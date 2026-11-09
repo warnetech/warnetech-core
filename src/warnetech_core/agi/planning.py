@@ -60,6 +60,7 @@ class TaskNode(BaseModel):
 class Goal(BaseModel):
     """A high-level objective to be decomposed into tasks."""
 
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex)
     description: str
     success_criteria: list[str] = Field(default_factory=list)
     constraints: list[str] = Field(default_factory=list)

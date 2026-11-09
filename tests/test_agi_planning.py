@@ -13,6 +13,22 @@ from warnetech_core.agi.planning import (
 )
 
 
+class TestGoal:
+    def test_id_is_generated_when_omitted(self):
+        goal = Goal(description="Analyse operational telemetry")
+        assert isinstance(goal.id, str)
+        assert len(goal.id) == 32
+
+    def test_same_description_gets_distinct_ids(self):
+        first = Goal(description="Evaluate service health")
+        second = Goal(description="Evaluate service health")
+        assert first.id != second.id
+
+    def test_explicit_id_is_kept(self):
+        goal = Goal(id="goal-123", description="Summarise system findings")
+        assert goal.id == "goal-123"
+
+
 class TestTaskNode:
     def test_defaults(self):
         t = TaskNode(title="do thing")
