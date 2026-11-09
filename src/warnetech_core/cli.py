@@ -190,9 +190,7 @@ def cmd_chat(args: argparse.Namespace) -> int:
             )
             from .delegation import DelegationRunner, load_agents
 
-            runner = DelegationRunner(
-                gateway, load_agents(), memory, project=args.project
-            )
+            runner = DelegationRunner(gateway, load_agents(), memory, project=args.project)
             return await run_chat(session, runner=runner)
         finally:
             await memory.aclose()
@@ -282,6 +280,10 @@ def main(argv: list[str] | None = None) -> int:
 
     memory_group.mount(sub)
 
+    from .agi_commands import group as agi_group
+
+    agi_group.mount(sub)
+
     args = parser.parse_args(argv)
     if getattr(args, "command", None) == "ollama":
         return ollama_group.dispatch(args)
@@ -295,6 +297,8 @@ def main(argv: list[str] | None = None) -> int:
         return route_group.dispatch(args)
     if getattr(args, "command", None) == "memory":
         return memory_group.dispatch(args)
+    if getattr(args, "command", None) == "agi":
+        return agi_group.dispatch(args)
     return int(args.func(args))
 
 

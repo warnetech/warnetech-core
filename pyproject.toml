@@ -26,17 +26,20 @@ hf = [
     "accelerate>=1; python_version >= '3.11'",
 ]
 dev = [
+    # The service tests import FastAPI, so `.[dev]` must include the service stack.
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "ruff>=0.4",
 ]
 
 [project.scripts]
-warnetech = "warnetech-core.cli:main"
-warnetech_memory = "warnetech-core.memory.warnetech_memory:main"
+warnetech = "warnetech_core.cli:main"
+warnetech_memory = "warnetech_core.memory.warnetech_memory:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/warnetech-core"]
+packages = ["src/warnetech_core"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

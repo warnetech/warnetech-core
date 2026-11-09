@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import time
 import uuid
 from enum import Enum
@@ -17,6 +18,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from ..gateway import AIGateway
+from ._coerce import strip_code_fence
 
 log = logging.getLogger("warnetech.agi.planning")
 
@@ -165,10 +167,7 @@ class Planner:
 
     def _parse_tasks(self, text: str) -> list[TaskNode]:
         """Parse the LLM's JSON array into TaskNode objects."""
-        text = text.strip()
-        if text.startswith("```"):
-            lines = text.splitlines()
-            text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+        text = strip_code_fence(text)
 
         try:
             raw_tasks = json.loads(text)
@@ -180,25 +179,38 @@ class Planner:
             log.error("planner output is not a list: %s", type(raw_tasks))
             return []
 
+        # Keep only object entries, so the nodes and their raw dicts stay index-aligned.
+        entries = [raw for raw in raw_tasks if isinstance(raw, dict)]
         nodes: list[TaskNode] = []
         title_to_id: dict[str, str] = {}
 
-        for raw in raw_tasks:
-            if not isinstance(raw, dict):
-                continue
+        for raw in entries:
             node = TaskNode(
-                title=raw.get("title", "untitled"),
-                description=raw.get("description", ""),
-                tool_hint=raw.get("tool_hint"),
-                estimated_seconds=raw.get("estimated_seconds"),
+                title=str(raw.get("title") or "untitled"),
+                description=str(raw.get("description") or ""),
+                tool_hint=raw["tool_hint"] if isinstance(raw.get("tool_hint"), str) else None,
+                estimated_seconds=_seconds(raw.get("estimated_seconds")),
             )
             title_to_id[node.title] = node.id
             nodes.append(node)
 
-        for raw, node in zip(raw_tasks, nodes, strict=True):
-            if not isinstance(raw, dict):
+        for raw, node in zip(entries, nodes, strict=True):
+            deps = raw.get("depends_on")
+            if not isinstance(deps, list):
                 continue
-            deps = raw.get("depends_on", [])
-            node.depends_on = [title_to_id[d] for d in deps if d in title_to_id]
+            node.depends_on = [
+                title_to_id[d] for d in deps if isinstance(d, str) and d in title_to_id
+            ]
 
         return nodes
+
+
+def _seconds(value: Any) -> float | None:
+    """A non-negative duration, or None when the planner gave something unusable."""
+    if isinstance(value, bool):
+        return None
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError):
+        return None
+    return seconds if seconds >= 0 and math.isfinite(seconds) else None

@@ -16,6 +16,7 @@ from enum import Enum
 from pydantic import BaseModel, Field
 
 from ..gateway import AIGateway
+from ._coerce import strip_code_fence, unit_interval
 
 log = logging.getLogger("warnetech.agi.reflection")
 
@@ -129,36 +130,41 @@ class Reflector:
 
     def _parse_reflection(self, text: str) -> ReflectionResult:
         """Parse LLM JSON into a ReflectionResult."""
-        text = text.strip()
-        if text.startswith("```"):
-            lines = text.splitlines()
-            text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+        text = strip_code_fence(text)
 
         try:
             obj = json.loads(text)
         except json.JSONDecodeError:
+            obj = None
+
+        if not isinstance(obj, dict):
             log.warning("failed to parse reflection output: %s", text[:200])
             return ReflectionResult(
                 critiques=[
                     Critique(
                         aspect="parse_failure",
                         severity=CritiqueSeverity.WARNING,
-                        description="Reflector output was not valid JSON",
+                        description="Reflector output was not a valid JSON object",
                     )
                 ],
                 overall_quality=0.5,
             )
 
-        critiques = []
-        for raw in obj.get("critiques", []):
+        raw_critiques = obj.get("critiques")
+        critiques: list[Critique] = []
+        for raw in raw_critiques if isinstance(raw_critiques, list) else []:
+            if not isinstance(raw, dict):
+                continue
             try:
                 critiques.append(Critique(**raw))
-            except Exception:
+            except (TypeError, ValueError):
                 continue
 
+        revised = obj.get("revised_output")
         return ReflectionResult(
             critiques=critiques,
-            overall_quality=float(obj.get("overall_quality", 0.5)),
-            should_retry=bool(obj.get("should_retry", False)),
-            revised_output=obj.get("revised_output"),
+            overall_quality=unit_interval(obj.get("overall_quality")),
+            # Only a real JSON true asks for a retry: "false" as a string must not.
+            should_retry=obj.get("should_retry") is True,
+            revised_output=revised if isinstance(revised, str) else None,
         )

@@ -24,7 +24,7 @@ wiring decisions it honours and how it plugs into `warnetech_ai_controller`.
 
 | | What | Docs |
 |---|---|---|
-| AGI modules | Reasoning, planning, tool use, reflection and an orchestrator (`agi/`) | |
+| AGI modules | Reasoning, planning, tool use, reflection and an orchestrator, plus `warnetech agi run` (`agi/`) | [`docs/AGI.md`](docs/AGI.md) |
 | MCP server | 10 tools over stdio, for any MCP client (`mcp-servers/`) | [`mcp-servers/README.md`](mcp-servers/README.md) |
 | Local models | Ollama and LM Studio, a no-network mode, several machines at once | [`docs/OLLAMA.md`](docs/OLLAMA.md) |
 | Deployment | `warnetech doctor`, a service image, air-gapped install, platform support | [`docs/DEPLOY.md`](docs/DEPLOY.md) |

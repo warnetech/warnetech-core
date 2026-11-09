@@ -3,6 +3,7 @@ from typing import Any
 
 logger = logging.getLogger("ContextWindow")
 
+
 class ContextWindow:
     def __init__(self, max_tokens: int = 4096, safety_margin: int = 256) -> None:
         self.max_tokens = max_tokens
@@ -20,12 +21,12 @@ class ContextWindow:
         system_prompt: str,
         rag_chunks: list[dict[str, Any]],
         chat_history: list[dict[str, str]],
-        current_query: str
+        current_query: str,
     ) -> str:
         """Assemble and truncate context windows to respect token budget limits."""
         sys_tokens = self.estimate_tokens(system_prompt)
         query_tokens = self.estimate_tokens(current_query)
-        
+
         # Budget remaining for RAG and history
         remaining_budget = self.effective_limit - (sys_tokens + query_tokens)
         if remaining_budget < 0:
@@ -36,7 +37,7 @@ class ContextWindow:
         formatted_rag = []
         rag_tokens = 0
         for chunk in rag_chunks:
-            content = chunk.get("content", "")
+            content = chunk.get("content") or ""
             chunk_text = f"[RAG Context]: {content}\n"
             c_tokens = self.estimate_tokens(chunk_text)
             if rag_tokens + c_tokens <= remaining_budget // 2:
@@ -52,10 +53,10 @@ class ContextWindow:
         history_tokens = 0
         for msg in reversed(chat_history):
             role = msg.get("role", "user")
-            text = msg.get("content", "")
+            text = msg.get("content") or ""
             msg_text = f"{role.capitalize()}: {text}\n"
             m_tokens = self.estimate_tokens(msg_text)
-            
+
             if history_tokens + m_tokens <= remaining_budget:
                 formatted_history.insert(0, msg_text)
                 history_tokens += m_tokens
@@ -67,14 +68,15 @@ class ContextWindow:
             f"System: {system_prompt}\n" if system_prompt else "",
             "".join(formatted_rag),
             "".join(formatted_history),
-            f"User: {current_query}\nAssistant:"
+            f"User: {current_query}\nAssistant:",
         ]
-        
+
         final_prompt = "\n".join([p for p in assembled_parts if p])
         logger.debug(
             f"Assembled prompt with estimated {self.estimate_tokens(final_prompt)} tokens."
         )
         return final_prompt
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
@@ -86,6 +88,6 @@ if __name__ == "__main__":
         {"role": "assistant", "content": "It is a temporal engine."},
     ]
     query = "How does state transition?"
-    
+
     prompt = cw.assemble_prompt(sys_p, rag, history, query)
     print("Assembled Prompt Test Output:\n", prompt)

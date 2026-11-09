@@ -13,14 +13,19 @@ Each module works independently or composes through the orchestrator.
 All model calls go through :class:`~warnetech_core.gateway.AIGateway`.
 """
 
+from .agent_orchestrator import AgentOrchestrator
+from .context_window import ContextWindow
 from .orchestrator import AGIOrchestrator
 from .planning import Goal, Plan, Planner, PlanStatus, TaskNode
 from .reasoning import ReasoningEngine, ReasoningStrategy, ThoughtStep
 from .reflection import Critique, CritiqueSeverity, Reflector
+from .temporal_engine import TemporalEngine
 from .tools import ToolCall, ToolDefinition, ToolRegistry, ToolResult
 
 __all__ = [
     "AGIOrchestrator",
+    "AgentOrchestrator",
+    "ContextWindow",
     "Critique",
     "CritiqueSeverity",
     "Goal",
@@ -31,6 +36,7 @@ __all__ = [
     "ReasoningStrategy",
     "Reflector",
     "TaskNode",
+    "TemporalEngine",
     "ThoughtStep",
     "ToolCall",
     "ToolDefinition",
