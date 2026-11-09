@@ -1,6 +1,6 @@
 # PB-7A Task Verification Contract — Specification
 
-**Status:** SPEC UNDER REVIEW / IMPLEMENTATION BLOCKED. D4, D6 and D10 amended (§36); final approval pending.
+**Status:** APPROVED FOR TESTS-FIRST IMPLEMENTATION (§37). PB-7 remains blocked until PB-7A is implemented and closed.
 **Blocks:** PB-7 Execution Verification (`docs/plans/2026-11-09-pb7-execution-verification/spec.md`, SPEC APPROVED / IMPLEMENTATION BLOCKED).
 **Scope of this document:** specification only. No production code, planner code, tests, persistence, or telemetry change.
 
@@ -719,3 +719,51 @@ Remaining blockers:
   - D7/D8 remain PB-7B items; their moot status for PB-7A needs confirmation
   - No string-size bound convention for planner text beyond service constants; not needed in PB-7A
 ```
+
+---
+
+## 37. PB-7A final approval record
+
+**PB-7A:** APPROVED FOR TESTS-FIRST IMPLEMENTATION. Governance baseline `becea8a`.
+**PB-7:** SPEC APPROVED / IMPLEMENTATION BLOCKED until PB-7A is implemented, tested and closed.
+
+### 37.1 Final decisions
+
+| ID | Decision |
+|----|----------|
+| D1 | Typed `TaskVerificationContract`. APPROVED. |
+| D2 | Optional contract; backwards compatible. APPROVED. |
+| D3 | Absent or explicit-empty contract → PB-7 `UNCERTAIN` / `no_verification_contract`. Empty never means PASS. APPROVED. |
+| D4 | Two kinds only: `execution_success`, `result_present`. `required_field`, `equals`, `non_empty`, `result_type` DEFERRED to PB-7B. APPROVED. |
+| D5 | AND-only. APPROVED. |
+| D6 | `MAX_VERIFICATION_CHECKS = 2`. Duplicate kinds rejected. Overflow rejected. Never truncated, never deduplicated silently. APPROVED. |
+| D7 | Field references DEFERRED to PB-7B. No `field` key in PB-7A model. |
+| D8 | Expected values DEFERRED to PB-7B. No `expected` key in PB-7A model. |
+| D9 | Executable verifier logic FORBIDDEN. APPROVED. |
+| D10 | Malformed explicit contract raises `ValueError` during planning/parsing. No new exception class. Message names the bounded violation only. APPROVED. |
+| D10-a | On planning failure the goal must not remain `running`. Record `failed` (existing state, `orchestrator.py:150`), then re-raise the original `ValueError`. Catch narrowly around the `decompose` call only. APPROVED with that boundary. |
+| D11 | No persistent schema change. APPROVED subject to the check in §37.2. |
+| D12 | `Goal.success_criteria` remains free-form context. APPROVED. |
+
+### 37.2 Persistence clearance (pre-code)
+
+- `TaskNode`, `Plan`, `Goal` are not serialised by any code in `src/`. Verified by grep at HEAD `becea8a`.
+- Durable AGI state is `goals.json` (`GoalRecord`), `reflections.json` (`ReflectionRecord`) and tool metrics. None contains a task or plan.
+- Telemetry `plan_generated` carries only `task_count`.
+- **Result: no `schema_version: 1` structure is touched. No migration. Clearance granted.**
+
+### 37.3 Implementation contract (for the tests-first step)
+
+- New module: `src/warnetech_core/agi/verification.py` with `VerificationCheckKind` (enum: `EXECUTION_SUCCESS`, `RESULT_PRESENT`), `VerificationCheck` (frozen, `kind` only, `extra="forbid"`), `TaskVerificationContract` (frozen, `checks` tuple), and `MAX_VERIFICATION_CHECKS = 2`.
+- `TaskNode` gains `verification: TaskVerificationContract | None = None`.
+- Parser: absent or `null` → `None`. Explicit `{"checks": []}` → `None`. Any malformed explicit contract → `ValueError`. Order of checks: count, then unknown key/kind, then duplicates.
+- Orchestrator: wrap only the `await self.planner.decompose(goal)` call in `except ValueError`, record `failed` through the existing `_persist` path, then `raise`.
+- Unchanged: candidates, ranking, retry, failover, reflection, `OutcomeAnalysis`, telemetry event set, persistence schema.
+
+### 37.4 RED test file
+
+`tests/test_agi_task_verification_contract.py`, CONTRACT-001 to CONTRACT-016 as listed in the approval. Current state: collection error (`ModuleNotRegistered` import of `warnetech_core.agi.verification`), which is the expected RED state before implementation.
+
+### 37.5 Known consequence
+
+A malformed contract now aborts the whole goal, not one task. This is the approved behaviour (D10). Valid plans are unaffected.
