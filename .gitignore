@@ -51,3 +51,9 @@ Thumbs.db
 # Secrets
 .env
 .env.local
+
+# Clawness runtime state (hook-managed, regenerated each session)
+.clawness/sessions.json
+.clawness/guard_sessions.json
+.clawness/handoff.md
+.clawness/handoff_autostart.json
