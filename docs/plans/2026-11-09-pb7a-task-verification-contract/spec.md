@@ -361,45 +361,153 @@ Stop and request review if PB-7A work requires:
 
 ---
 
-## 31. Design decisions requiring approval
+## 31. Design decisions requiring approval (D1–D12)
 
-| ID | Decision | Proposal |
-|----|----------|----------|
-| D1 | Separate typed `TaskVerificationContract`, not `metadata`. | YES. Typed optional field on `TaskNode`. |
-| D2 | Contract optional. | YES. |
-| D3 | Missing or empty contract. | Both normalise to `None`. PB-7 returns UNCERTAIN / `no_verification_contract`. |
-| D4 | Initial check kinds. | **Changed from original.** `execution_success` and `result_present` only. `result_type`, `required_field`, `equals`, `non_empty` deferred (F1, F2). |
-| D5 | Composition. | AND only. |
-| D6 | Maximum checks. | 8 per task. Over-limit rejected, never truncated. |
-| D7 | Field references. | **Moot for PB-7A.** No field references exist. Field grammar deferred to PB-7B (single-level). |
-| D8 | Expected values. | **Moot for PB-7A.** No expected values exist. Value bounds deferred to PB-7B. |
-| D9 | Planner executable verifier logic. | FORBIDDEN. |
-| D10 | Malformed contract handling. | **Option A (proposed):** downgrade that task's contract to `None` with a warning log; `decompose` does not raise. **Option B (alternative):** raise a planning error from `decompose`. Option B needs a new exception and changes orchestrator behaviour for malformed plans. A is recommended because existing planner code already degrades malformed output (I4, I5). |
-| D11 | Persistence. | No persistent schema change in PB-7A. |
-| D12 | `Goal.success_criteria`. | Remains free text. Planner may use it as context. Verifier never parses it. |
-| D13 | Warning log for malformed contracts. | YES. Log only, no telemetry event, no new event name. |
-| D14 | Planner prompt change. | YES, one sentence in `_PLANNER_SYSTEM`. Expected per §19. |
-| D15 | Typed field instead of `metadata`. | YES. `metadata` stays unused by verification. |
-| D16 | Model type. | Pydantic `BaseModel` with `frozen=True, extra="forbid"`, matching `TaskNode` and `ToolResult`. Not a dataclass. |
+Status values: PROPOSED (user table, unchanged) and the inspection verdict in §31.1. No decision is approved by this section.
 
----
+| ID | Decision | Proposed PB-7A Contract | Status |
+|---|---|---|---|
+| **D1** | Structured task verification contract | Introduce a separate typed `TaskVerificationContract` containing machine-verifiable task completion criteria. | **PROPOSED** |
+| **D2** | Backwards compatibility | The verification contract remains optional. Existing tasks without a contract continue to parse and execute normally. | **PROPOSED** |
+| **D3** | Missing or empty contract | Treat as no usable verification contract. PB-7 returns `UNCERTAIN` with reason `no_verification_contract`. An empty contract must never automatically mean PASS. | **PROPOSED** |
+| **D4** | Initial verification check kinds | Initially allow only `execution_success`, `result_present`, `result_type`, `required_field`, `equals`, and `non_empty`. | **PROPOSED** |
+| **D5** | Check composition | Use **AND-only** semantics initially. Every declared required check must pass for overall PASS. No OR, NOT, weighting, or nested logical expressions. | **PROPOSED** |
+| **D6** | Maximum checks | Limit each task to **8 verification checks** initially. | **PROPOSED** |
+| **D7** | Field references | Permit **single-level fields only** initially. No arbitrary dotted paths, indexes, deep object traversal, dynamic attributes, or property execution. | **PROPOSED** |
+| **D8** | Expected values | Permit bounded safe scalar values only: `None`, boolean, integer, finite float, and bounded string. No mappings, lists, binary values, callables, executable objects, or arbitrary structured payloads. | **PROPOSED** |
+| **D9** | Executable verifier logic | **FORBIDDEN.** Planner output cannot contain Python, shell commands, `eval`, `exec`, callbacks, dynamic imports, generated predicates, or any other executable verification logic. | **PROPOSED** |
+| **D10** | Malformed contracts | Fail safely using the repository's existing planning-domain error convention. Unknown kinds, unsafe values, malformed structures, invalid fields, and excessive checks must never silently become PASS. | **PROPOSED** |
+| **D11** | Persistence | PB-7A is not permitted to change the persistent schema. If adding the contract affects durable task/plan representation or `schema_version`, implementation stops for a separate migration decision. | **PROPOSED** |
+| **D12** | Relationship to `Goal.success_criteria` | Keep `Goal.success_criteria` as free-form human/model-facing context. The planner may use it when producing an allowlisted structured verification contract, but PB-7 must **not** parse that free text at runtime to invent verification checks. | **PROPOSED** |
 
-## 32. Ready gate
+### 31.1 Repository inspection verdicts
 
-PB-7A implementation remains blocked until:
+Each verdict cites repository evidence. Inspection did not modify production code.
 
-- [ ] D1–D16 approved (or amended and re-approved),
-- [x] TaskNode inspected (I1, I2),
-- [x] Planner output schema inspected (I3),
-- [x] Planner parser inspected (I4),
-- [x] Planner error conventions inspected (I5),
-- [x] Planner tests inspected (I10),
-- [x] Result model inspected (I6, F1),
-- [x] Persistence impact inspected (I7, §26),
-- [ ] Check kinds finalised (D4 approval),
-- [ ] Bounds finalised (D6; D7/D8 moot),
-- [ ] Malformed-contract behaviour finalised (D10 approval),
-- [ ] PB-7 specification reconciled with this allowlist (see §33).
+| ID | Verdict | Evidence and reasoning |
+|---|---|---|
+| D1 | **APPROVE** | `TaskNode` is a pydantic model (`planning.py:34`) with no verification field. A typed optional field fits it. `metadata` is never read or written (grep of `src/`, `tests/`). |
+| D2 | **APPROVE** | `_parse_tasks` already tolerates missing keys; `verification` absent maps to `None`. |
+| D3 | **APPROVE** | Normalise `checks: []` to `None`. Matches the rule that an empty contract never means PASS. |
+| D4 | **AMEND** | Only `execution_success` and `result_present` are evaluable. `TaskNode.result` is `str \| None` (`planning.py:43`), set at `orchestrator.py:288` from `reasoning.conclusion` plus stringified `last_tool.output`. `ToolResult.output` is `Any` (`tools.py:63`) and never attached to the task. `result_type`, `required_field`, `equals`, `non_empty`-on-field have no structured source. **Amend to two kinds.** |
+| D5 | **APPROVE** | AND-only matches the runtime's boolean checks. No composition code exists to conflict with. |
+| D6 | **AMEND** | No check-count precedent exists. The only count bounds are orchestrator constructor defaults (`max_cycles=20`, `max_retries_per_task=2`, `orchestrator.py:86-87`); the planner has no task cap. With two boolean kinds, a cap of 8 admits only duplicates. **Amend to: reject duplicate kinds, and set the ceiling equal to the allowlist size.** A numeric ceiling is set when PB-7B adds kinds. |
+| D7 | **APPROVE for PB-7B only; MOOT for PB-7A** | PB-7A contains no field references. `ToolDefinition.parameters` is a free-form `dict[str, Any]` (`tools.py:27`) with no name grammar, so there is no repository precedent for a field grammar. Single-level remains the proposal for PB-7B. |
+| D8 | **AMEND / DEFER** | PB-7A has no expected values, so D8 is moot. No string-size bound exists in AGI code; the only truncation is for log text (`text[:200]`, `planning.py:176`, `reflection.py:141`). Spec §33 requires approval before a limit is chosen. Scalar bounds defer to PB-7B. |
+| D9 | **APPROVE** | Planner output is parsed as JSON and never executed. Forbidding executable logic keeps it that way. |
+| D10 | **AMEND** | The stated convention does not exist. No planning exception exists (`errors.py` has no planning type). AGI parsers never raise: `_coerce.py` documents that helpers "normalise such input so the AGI parsers never raise", and `_parse_tasks` logs and returns `[]` (`planning.py:176`). **Amend to option A: downgrade the task's contract to `None` with a warning log; `decompose` does not raise.** Option B (raise) would introduce a new error type and change orchestrator behaviour. |
+| D11 | **APPROVE** | `TaskNode`, `Plan` and `Goal` are not serialised anywhere in `src/` (only exported in `__init__.py` and used in memory). Durable state is `GoalRecord`, `ReflectionRecord` and tool metrics only. No `schema_version: 1` structure is touched, so **PERSISTENCE MIGRATION REVIEW is not required.** |
+| D12 | **APPROVE** | `Goal.success_criteria` is `list[str]` (`planning.py:65`), used only as planner prompt text and reflection criteria (`orchestrator.py:239, 251`). Nothing parses it into checks. |
+
+### 31.2 Inspection findings by area
+
+- **TaskNode:** pydantic model, fields `id, title, description, status, depends_on, tool_hint, estimated_seconds, result, metadata`. Not persisted. Verification field addition is type-safe.
+- **Planner schema and prompt:** `_PLANNER_SYSTEM` (`planning.py:103-111`) lists four keys. The `verification` key would be a one-sentence prompt change (D14).
+- **Parser:** reads only known keys; drops non-dict entries; `tool_hint` kept only if `str`; log-and-degrade on bad input, never raises.
+- **Result model:** string-only at task level. Structured output exists only in `ToolResult.output` and is not connected to a task. This is the reason D4 and D8 are amended.
+- **Persistence:** no task or plan serialisation. Telemetry `plan_generated` carries `{"task_count": n}` only.
+- **Error contract:** no planning exception exists. Existing convention is no-raise (D10).
+- **Tests:** `tests/test_agi_planning.py` (16 tests) calls `_parse_tasks` with raw strings; sufficient fixture pattern for CONTRACT-013/014.
+- **Backwards compatibility:** optional field plus no-raise parser keeps legacy output parsing unchanged.
+
+### 31.3 Summary of verdicts
+
+| ID | Verdict |
+|----|---------|
+| D1 | APPROVE |
+| D2 | APPROVE |
+| D3 | APPROVE |
+| D4 | AMEND: `execution_success`, `result_present` only |
+| D5 | APPROVE |
+| D6 | AMEND: reject duplicate kinds; ceiling equals allowlist size |
+| D7 | MOOT for PB-7A; single-level for PB-7B |
+| D8 | MOOT for PB-7A; defer scalar and string bounds to PB-7B |
+| D9 | APPROVE |
+| D10 | AMEND: option A (downgrade to `None`, warning log, no raise) |
+| D11 | APPROVE; no migration review required |
+| D12 | APPROVE |
+
+## 32. Approval gate
+
+### Decision approval
+
+- [ ] D1 approved
+- [ ] D2 approved
+- [ ] D3 approved
+- [ ] D4 approved (as amended in §31.3)
+- [ ] D5 approved
+- [ ] D6 approved (as amended in §31.3)
+- [ ] D7 approved (moot for PB-7A; PB-7B only)
+- [ ] D8 approved (moot for PB-7A; deferred)
+- [ ] D9 approved
+- [ ] D10 approved (option A)
+- [ ] D11 approved
+- [ ] D12 approved
+
+### Repository inspection
+
+- [x] TaskNode model inspected
+- [x] Planner output schema inspected
+- [x] Planner prompt inspected
+- [x] Planner parser inspected
+- [x] Planner tests inspected
+- [x] Task/plan persistence impact inspected
+- [x] Existing serialisation paths inspected
+- [x] Existing planning-domain error type confirmed: **none exists**
+
+### Contract compatibility
+
+- [ ] Initial check kinds confirmed against result models (requires D4 amendment)
+- [ ] Check-count bound reviewed (requires D6 amendment)
+- [ ] Single-level field references: deferred to PB-7B
+- [ ] Scalar-value restrictions: deferred to PB-7B
+- [ ] String-size bound: no repository precedent; requires approval before any value is chosen (§33)
+- [ ] Malformed-contract behaviour defined (requires D10 approval)
+- [x] Existing planner fixtures remain backwards-compatible (by design; verified at implementation)
+- [x] No persistent schema migration required
+
+### Current status
+
+```text
+PB-7:    SPEC APPROVED / IMPLEMENTATION BLOCKED BY PB-7A
+PB-7A:   PROPOSED
+TaskVerificationContract: NOT IMPLEMENTED
+Planner output changes:   NOT APPROVED
+TaskNode changes:         NOT APPROVED
+PB-7 production verification: NOT IMPLEMENTED
+```
+
+## 32.1 Report for approval
+
+```text
+PB-7A D1:  APPROVE
+PB-7A D2:  APPROVE
+PB-7A D3:  APPROVE
+PB-7A D4:  AMEND (execution_success, result_present only)
+PB-7A D5:  APPROVE
+PB-7A D6:  AMEND (reject duplicates; ceiling = allowlist size)
+PB-7A D7:  MOOT for PB-7A (single-level for PB-7B)
+PB-7A D8:  MOOT for PB-7A (deferred to PB-7B)
+PB-7A D9:  APPROVE
+PB-7A D10: AMEND (option A: downgrade to None, warning, no raise)
+PB-7A D11: APPROVE (no migration review required)
+PB-7A D12: APPROVE
+
+TaskNode findings:      pydantic model; no verification field; metadata unused; not persisted.
+Planner schema findings: four keys in prompt; verification key = one-sentence prompt change.
+Parser findings:        ignores unknown keys; log-and-degrade; never raises.
+Result-model findings:  TaskNode.result is str; ToolResult.output (Any) not attached to task.
+Persistence findings:   TaskNode/Plan/Goal not serialised; durable records unaffected.
+Error-contract findings: no planning exception exists; AGI convention is no-raise.
+Backwards-compatibility findings: optional field; missing key -> None; legacy fixtures unchanged.
+
+PB-7A ready for approval: YES (decisions only; implementation still blocked)
+Blockers:
+  - D4, D6, D10 amendments require user approval
+  - No string-size bound precedent (spec §33); needed only in PB-7B
+  - PB-7 spec check semantics must be reconciled with the final allowlist
+```
+
 
 ## 33. Dependency on PB-7
 
