@@ -57,6 +57,34 @@ Runtime session files are git-ignored: `.clawness/sessions.json`,
 Durable records stay tracked: `.clawness/memory.md`, `.clawness/changelog.json`,
 `.clawness/version.json`, `.clawness/sast.json`.
 
+## Current AGI Baseline
+
+Baseline: `5e805d4`
+
+Status:
+- Phase 1: closed
+- Phase 2: closed
+- Candidate layer: closed
+- Metric-informed tool selection: closed
+- PB-1 selection observability: closed
+- PB-2 production selection-group governance: closed
+- PB-3 execution identity audit: closed
+- PB-4 retry selection stability: closed
+
+Validation: 1052 passed, 2 skipped, lint clean.
+
+Runtime policy:
+- Metric-informed selection remains off by default.
+- No production selection groups are assigned, so production tool substitution is inactive.
+- Tool selection occurs once per ordinary task retry sequence.
+- Retries reuse the originally selected tool.
+- Retry-time reselection is not permitted.
+- Automatic tool failover is not implemented.
+
+Governance:
+- Any future production `selection_group` assignment requires review through the PB-2 framework (`docs/plans/2026-11-09-pb2-selection-group-review/framework.md`).
+- Any behaviour that automatically changes the executing tool after an execution failure is automatic failover. It requires a separate approved specification. It is not unfinished PB-4 work.
+
 ## Executive Summary
 
 The next stage of development for `warnetech/warnetech-core` should focus on transforming the AGI layer from a collection of intelligent components into a structured autonomous reasoning system. Rather than simply adding more agents, prompts, or AI wrappers, the platform should gain stronger capabilities in planning, memory integrity, self-reflection, world modelling, and multi-agent collaboration.

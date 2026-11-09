@@ -149,6 +149,8 @@ orchestrator = AGIOrchestrator(gateway, tool_registry=registry)
 A tool runs only when a planned task names it in `tool_hint`, or, with metric selection on, when it is an approved candidate in the same `selection_group` as the hinted tool. The executed tool, not the hint, is the tool that receives the call. It receives the task's `task` and `description` as keyword arguments. Errors are caught and
 reported on the result; they do not stop the run.
 
+Current behaviour (PB5-F001): a tool error is recorded on its `ToolResult`, but it does not change the task or run result. If the reflection finds no errors, the task completes and the run reports `success=True`, even when the tool failed. Reflection does not receive the tool error. This is an open policy decision.
+
 ## Supporting modules
 
 | Module | Use it for | Calls a model? |
