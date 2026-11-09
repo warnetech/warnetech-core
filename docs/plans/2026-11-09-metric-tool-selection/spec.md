@@ -79,4 +79,6 @@ This needs its own approval, because it adds a field to the tool model.
 
 ## Status
 
-Implementation: **blocked**. Waiting on approval of `selection_group`, or on a decision to stop this feature.
+- Candidate layer: **implemented** in `aa453fd` (`ToolDefinition.selection_group` default `None`, `agi/candidates.py:resolve_candidates`). Tests in `tests/test_agi_candidates.py`. Tag-based discovery is rejected.
+- Ranking wired into runtime selection: **blocked**. It needs a final approval of the ranking acceptance criteria above, updated to use `selection_group`. Runtime selection is unchanged.
+- Groups are not assigned to any production tool yet. Each assignment needs a semantic review.
