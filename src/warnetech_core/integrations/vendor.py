@@ -100,7 +100,9 @@ def run_aicli(args: list[str], *, timeout: float = 120.0) -> subprocess.Complete
         f"{aicli_source()}{os.pathsep}{existing}" if existing else str(aicli_source())
     )
     return subprocess.run(  # noqa: S603 - fixed interpreter, list args, no shell
-        [sys.executable, "-m", "aicli", *args],
+        # -P keeps the working directory off sys.path, so a planted `aicli` package there
+        # cannot shadow the vendored one. Python 3.11+ only, which the guard above enforces.
+        [sys.executable, "-P", "-m", "aicli", *args],
         capture_output=True,
         text=True,
         timeout=timeout,

@@ -31,6 +31,7 @@ EXPECTED = {"claude-code-assist", "cli-ai-command-center-prd"}
 
 # ---- the real vendor/ directory -----------------------------------------
 
+
 def test_manifest_lists_both_repositories():
     assert set(manifest()) == EXPECTED
 
@@ -64,6 +65,7 @@ def test_vendored_tests_are_not_collected_by_our_suite():
 
 
 # ---- lookup safety ------------------------------------------------------
+
 
 @pytest.mark.parametrize("bad", ["", "nope", "../..", "claude-code-assist/../..", "/etc"])
 def test_unknown_or_traversing_names_are_refused(bad):
@@ -116,6 +118,7 @@ def test_manifest_that_is_not_an_object_is_refused(tmp_path, monkeypatch):
 
 # ---- using aicli on demand ----------------------------------------------
 
+
 def test_aicli_source_holds_the_package():
     assert (aicli_source() / "aicli").is_dir()
 
@@ -140,6 +143,7 @@ def test_run_aicli_reports_failure_without_raising():
 
 
 # ---- CLI ----------------------------------------------------------------
+
 
 def _parse(tail):
     parser = argparse.ArgumentParser()
@@ -168,10 +172,14 @@ def test_vendor_path_unknown_name_fails_cleanly(capsys):
 
 # ---- sync script --------------------------------------------------------
 
+
 def _sync(*args):
     return subprocess.run(
         ["bash", str(REPO / "scripts" / "vendor_sync.sh"), *args],
-        capture_output=True, text=True, timeout=30, check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
     )
 
 
@@ -199,4 +207,16 @@ def test_run_aicli_guard_allows_the_minimum_version(monkeypatch):
     started = []
     monkeypatch.setattr(subprocess, "run", lambda *a, **k: started.append(a) or "ran")
     assert run_aicli(["--version"]) == "ran"
-    assert started and started[0][0][1:3] == ["-m", "aicli"]
+    assert started and started[0][0][1:4] == ["-P", "-m", "aicli"]
+
+
+def test_run_aicli_ignores_a_planted_module_in_the_working_directory(monkeypatch, tmp_path):
+    # Regression: `python -m` searches the cwd first. With -P it must not.
+    (tmp_path / "aicli").mkdir()
+    (tmp_path / "aicli" / "__init__.py").write_text("raise SystemExit('planted')\n")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "version_info", (*AICLI_MIN_PYTHON, 0, "final", 0))
+    started = []
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: started.append(a) or "ran")
+    run_aicli(["--version"])
+    assert "-P" in started[0][0]
