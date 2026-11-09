@@ -62,6 +62,8 @@ class ToolResult(BaseModel):
     success: bool = True
     output: Any = None
     error: str | None = None
+    # Exception class name only (never the message). Set when a handler raises.
+    error_type: str | None = None
     elapsed_ms: float = 0.0
 
 
@@ -141,6 +143,7 @@ class ToolRegistry:
                 call_id=call.call_id,
                 success=False,
                 error=f"{type(exc).__name__}: {exc}",
+                error_type=type(exc).__name__,
                 elapsed_ms=elapsed,
             )
 

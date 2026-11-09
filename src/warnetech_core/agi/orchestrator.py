@@ -23,7 +23,7 @@ from .capability_registry import CapabilityRegistry
 from .confidence import ConfidenceScorer
 from .planning import Goal, Plan, Planner, PlanStatus
 from .reasoning import ReasoningEngine, ReasoningResult, ReasoningStrategy
-from .reflection import CritiqueSeverity, ReflectionResult, Reflector
+from .reflection import Critique, CritiqueSeverity, ReflectionResult, Reflector
 from .state import AgentStateStore, ReflectionHistory
 from .telemetry import Telemetry, TelemetryEvent
 from .tool_metrics import ToolMetrics
@@ -232,11 +232,30 @@ class AGIOrchestrator:
                 if last_tool.success and last_tool.output:
                     output_text += f"\n\nTool output: {last_tool.output}"
 
+            failed_tool = self._last_failed_tool(record)
             reflection = await self.reflector.evaluate(
                 question=task.title,
                 output=output_text,
                 criteria=goal.success_criteria,
             )
+            if failed_tool is not None and not self._retry_follows(reflection, task, retries):
+                # Terminal tool failure with no retry to come. Reflection must see it (bounded
+                # text: tool name and error class only), and the result must not read as success.
+                failure_line = (
+                    f"Tool failed: {failed_tool.tool_name} "
+                    f"({failed_tool.error_type or 'UnknownError'})"
+                )
+                reflection = await self.reflector.evaluate(
+                    question=task.title,
+                    output=f"{output_text}\n\n{failure_line}",
+                    criteria=goal.success_criteria,
+                )
+                if not self._retry_follows(reflection, task, retries) and not reflection.has_errors:
+                    reflection = reflection.model_copy(update={"critiques": [
+                        *reflection.critiques,
+                        Critique(aspect="execution", severity=CritiqueSeverity.ERROR,
+                                 description=failure_line),
+                    ]})
             record.reflection = reflection
             if self._phase2:
                 self._persist(goal.id, "reflection_history", self.reflection_history.record,
@@ -337,6 +356,19 @@ class AGIOrchestrator:
             return hint, "default", candidate_names, "single_candidate"
         winner = pick_candidate(candidates, self.tool_metrics)
         return winner.name, "metrics", candidate_names, "metric_ranked"
+
+    @staticmethod
+    def _last_failed_tool(record: CycleRecord) -> ToolResult | None:
+        """The attempt's tool result if its tool failed, otherwise None."""
+        if record.tool_results and not record.tool_results[-1].success:
+            return record.tool_results[-1]
+        return None
+
+    def _retry_follows(
+        self, reflection: ReflectionResult, task: Any, retries: dict[str, int]
+    ) -> bool:
+        """True when the existing retry branch will send this task back for another attempt."""
+        return reflection.should_retry and retries.get(task.id, 0) < self.max_retries_per_task
 
     def _persist(
         self,
