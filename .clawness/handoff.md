@@ -1,20 +1,18 @@
-# Handoff — Package rename + Python constraint
+# Handoff: AGI Phase 1 (not started in code)
 
-**Done:**
-- Renamed `src/warnetech_core/` → `src/warnetech-core/`
-- Updated pyproject.toml scripts & packages
-- Committed (3978a89)
+Branch: `ccr-2ddd16bf-wsxi86` (pushed, clean at `fbb428a`).
+Done: `docs/agi-roadmap.md` committed (`1f41230`), session-tracking commit `fbb428a`.
 
-**BLOCKER:** User on Python 3.8.10. Warnetech-core requires 3.10+.
-- Must upgrade Python to proceed
+Next: confirm Phase 1 scope, then build it inside `src/warnetech_core/agi/` (not a root `agi/`).
+Scope: `capability_registry.py` wrapping existing `tools.py` ToolRegistry; `confidence.py` scoring planner/reflector output; telemetry events emitted from `planning.py`, `reflection.py`, `orchestrator.py`, `tools.py`; tests in `tests/test_capability_registry.py`, `test_confidence.py`, `test_telemetry.py`, `test_planning.py`.
+Run first: `pytest tests/test_agi_planning.py tests/test_agi_tools.py` to confirm the baseline.
 
-**Still needed:**
-1. Update all imports: `warnetech_core` → `warnetech-core` (all .py files, tests, scripts)
-2. Test: `python -m warnetech-core ask "test"`
-3. Research task: clarify app scope (purpose, features, users)
+Uncommitted: none.
 
-**Open questions:**
-- Will user upgrade Python to 3.10+?
-- What app is being built? (for research)
+Open questions:
+- Confirm Phase 1 scope above before writing code.
+- Ghost Alpha reconstruction: real records or synthetic? Still on hold; examples must stay neutral.
+- Dependabot alerts were reported on push; not reviewed.
+- Attribution: `Co-Authored-By` line omitted from commits (model-identifier rule conflict); confirm.
 
 **Autostart:** no
