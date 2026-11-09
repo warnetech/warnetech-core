@@ -1,49 +1,75 @@
 # Warnetech-Core AGI Expansion Roadmap
 
-## Status (Phase 1 complete)
+## Status (Phase 1 closed, Phase 2 in progress)
 
-This document is the long-range vision. The status below records what shipped
-on `ccr-2ddd16bf-wsxi86`; the sections after it are unchanged design notes.
+This document is the long-range vision. The status below records what shipped on
+`ccr-2ddd16bf-wsxi86`. Sections after it are design notes; where they conflict with
+the code, the code is authoritative.
 
-**Shipped in Phase 1**
+### Phase 1 (closed)
 
-- Planner duplicate-title fix: dependencies resolve correctly when two tasks share a title.
-- `Goal.id`: stable id on every goal, used to correlate telemetry.
-- Capability metadata: `CapabilityRegistry` with dependency validation. Stored on the
-  orchestrator but not yet read by the run loop.
-- Confidence scoring: a heuristic run-level score (`OrchestratorResult.confidence`).
-  It is not a per-memory score, so it does not implement section 3's memory framework.
-- Telemetry: opt-in JSONL event sink, with five events from the orchestrator.
-- Integration tests: scripted-gateway tests for the no-telemetry baseline, event order,
-  tool selection, retries, and confidence values.
+| Task | Item | Where |
+|---|---|---|
+| T1 | Planner: duplicate task titles map to every matching task ID, so a dependency waits for all matches | `agi/planning.py` |
+| T2 | `Goal.id`: stable identifier used to correlate telemetry | `agi/planning.py` |
+| T3 | Capability metadata: `ToolDefinition` gained `version` and `dependencies`; `CapabilityRegistry` validates dependencies | `agi/tools.py`, `agi/capability_registry.py` |
+| T4 | Confidence: deterministic 0.0-1.0 run-level score; supporting evidence raises it, contradictions lower it | `agi/confidence.py` |
+| T5 | Telemetry: opt-in JSONL sink with five events: `goal_received`, `plan_generated`, `tool_selected`, `execution_completed`, `reflection_completed` | `agi/telemetry.py` |
+| T6 | Integration of the above into `AGIOrchestrator` | `agi/orchestrator.py` |
+| T7 | Documentation and validation (this section) | `docs/agi-roadmap.md` |
 
-**Phase 2 (built, not yet wired into the orchestrator)**
+Runtime behaviour that the docs must not overstate:
 
-- `agi/state.py`: `AgentStateStore` (goal history, JSON, atomic writes) and
-  `ReflectionHistory`.
-- `agi/tool_metrics.py`: `ToolMetrics` with Beta-posterior ranking and Thompson
-  sampling for adaptive selection.
-- Tests: `tests/test_agi_state.py`, `tests/test_agi_tool_metrics.py`.
+- The capability registry is stored on the orchestrator but the run loop does not read it.
+  Tools are not selected from capability metadata.
+- Confidence is computed once, when a run finishes. It is not a gate between tool
+  execution and reflection.
+- Telemetry is exported from `warnetech_core.agi.telemetry`. It is not re-exported from
+  the `agi` package.
 
-**Not in Phase 1**
+**Phase 1 persistence boundary.** Reflection results and goal state live in memory only.
+Phase 1 has no persistent reflection history, goal history, tool-performance history or
+state store.
 
-- Memory confidence per memory record (section 3).
-- Reading capability metadata during tool selection (section 1, section 9).
-- Persistent state (section 4) and reflection persistence.
+### Phase 2 (in progress)
 
-## Phase 2 candidates (placeholder, not started)
+Scope is the three Phase 2 headings from the priority list below, with the placeholder
+items placed under them:
 
-- State store
-- Reflection persistence
-- Goal history
-- Tool metrics
-- Bayesian tool ranking
-- Adaptive tool selection
+```text
+Phase 2
+|
++-- Reflection Engine
+|   +-- Reflection history
+|   +-- Reflection improvements, outcome analysis, retry recommendations (not started)
+|
++-- Persistent State
+|   +-- State store
+|   +-- Goal history
+|   +-- Reflection persistence, restart recovery (not started)
+|
++-- Tool Selection
+    +-- Tool metrics
+    +-- Bayesian (Laplace) prior and ranking
+    +-- Adaptive selection
+```
 
-Phase 2 scope was confirmed on 2026-11-09 as the list above, grouped under the
-priority-list headings: Reflection Engine (reflection history), Persistent State
-(state store, goal history), Tool Selection (tool metrics, Bayesian ranking,
-adaptive selection). Plan: `docs/plans/2026-11-09-phase-2/plan.md`.
+Built so far, in `agi/state.py` and `agi/tool_metrics.py`. Not yet called from
+`AGIOrchestrator`:
+
+- `AgentStateStore`: goal history in `goals.json`, written atomically.
+- `ReflectionHistory`: reflection summaries in `reflections.json`.
+- `ToolMetrics`: per-tool outcome counts, Beta-posterior ranking, Thompson-sampling
+  selection. An untried tool scores 0.5 under the default Beta(1, 1) prior.
+
+Plan: `docs/plans/2026-11-09-phase-2/plan.md`.
+
+### Repository hygiene
+
+Runtime session files are git-ignored: `.clawness/sessions.json`,
+`.clawness/guard_sessions.json`, `.clawness/handoff.md`, `.clawness/handoff_autostart.json`.
+Durable records stay tracked: `.clawness/memory.md`, `.clawness/changelog.json`,
+`.clawness/version.json`, `.clawness/sast.json`.
 
 ## Executive Summary
 
