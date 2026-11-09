@@ -1,5 +1,5 @@
 ---
-status: PROPOSED
+status: SPEC APPROVED; IMPLEMENTATION BLOCKED (see Definition of Ready)
 baseline: 162762a
 ---
 
@@ -77,6 +77,46 @@ Revert the PB-7 implementation commit. No state migration is needed, because not
 
 Stop and report if implementation requires: a persistent schema change, a new public API semantic, a retry or failover change, a ToolMetrics ranking change, a candidate change, a production selection group, a new LLM-facing prompt, or an unapproved telemetry event.
 
+## Approval record
+
+- Spec approved on the user's instruction "approve PB-7".
+- D1–D8 approved as proposed in section 52:
+  - D1 no contract gives UNCERTAIN / no_verification_contract
+  - D2 verifier internal error gives UNCERTAIN / verification_error
+  - D3 terminal PB-6 failure gives FAIL / execution_failed
+  - D4 VerificationResult is not persisted
+  - D5 no LLM verifier in PB-7
+  - D6 new bounded verification_completed event, pending compatibility review
+  - D7 reflection receives verdict and reason only
+  - D8 PB-7 does not modify ToolMetrics
+- Approval covers the specification only. It does not start implementation.
+
+## Repository inspection (against 162762a)
+
+- `TaskNode` fields: id, title, description, status, depends_on, tool_hint, estimated_seconds, result, metadata (unstructured dict).
+- `Goal.success_criteria` is a list of free-text strings. Nothing machine-checkable.
+- No structured verification contract exists on tasks or goals.
+
+Consequence: under D1, every task would currently return UNCERTAIN. PB-7 would add no PASS or FAIL until tasks can declare checks. That is a planner-output and task-model change, which is a stop condition in section 51, so it needs its own proposal.
+
+## Definition of Ready
+
+| Item | Status |
+|---|---|
+| D1–D8 approved | DONE |
+| VerificationResult finalised | Proposed, pending implementation review |
+| Verdict semantics finalised | Proposed in sections 6–7 |
+| Task verification contract identified | BLOCKED: none exists (see inspection) |
+| Reason codes mapped to real paths | Pending inspection |
+| Telemetry contract reviewed | Pending (D6) |
+| Reflection integration defined | Proposed (D7) |
+| Persistence decision confirmed | DONE (D4) |
+| Acceptance criteria approved | Approved with this spec |
+| Test plan approved | Approved with this spec |
+| Risk and rollback approved | Approved with this spec |
+
+Implementation stays blocked until the task verification contract is proposed and approved, in its own specification. Until then, no PB-7 production code or tests.
+
 ## Status
 
-PROPOSED. Implementation is blocked until this specification is reviewed and approved.
+SPEC APPROVED. IMPLEMENTATION BLOCKED on the task verification contract.
