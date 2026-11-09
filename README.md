@@ -1,534 +1,463 @@
-# Warnetech Core AGI
+# warnetech-core
 
-Warnetech Core contains an evolving AGI orchestration layer built around planning, tool execution, reflection, confidence scoring, capability metadata and telemetry.
+Shared **AI gateway**, **memory/context layer** and **local-model toolkit** for
+Warnetech projects.
 
-The AGI implementation lives under:
+Two problems, solved once instead of per project:
 
-```text
-src/warnetech_core/agi/
-```
+1. **AI Gateway** — every model call goes through one place that owns model
+   abstraction, versioned prompts, cost tracking, retry, rate limiting and
+   cross-provider fallback.
+2. **Memory & context** — namespaced storage with a one-call retrieval API, so
+   "does this AI remember X" is a dependency, not a rebuild.
 
-This is the canonical AGI package. New AGI functionality should extend the existing implementation rather than introduce a parallel root-level `agi/` package.
+Import it in-process, or run it as an HTTP service when several separately
+deployed projects need one bill and one memory store. Same code path either way.
+
+Built to drop into the existing Warnetech architecture — see
+[`docs/WARNETECH-ALIGNMENT.md`](docs/WARNETECH-ALIGNMENT.md) for the canonical
+wiring decisions it honours and how it plugs into `warnetech_ai_controller`.
 
 ---
+
+## Also in this repo
+
+| | What | Docs |
+|---|---|---|
+| AGI modules | Reasoning, planning, tool use, reflection and an orchestrator, plus `warnetech agi run` (`agi/`) | [`docs/AGI.md`](docs/AGI.md) |
+| MCP server | 10 tools over stdio, for any MCP client (`mcp-servers/`) | [`mcp-servers/README.md`](mcp-servers/README.md) |
+| Local models | Ollama and LM Studio, a no-network mode, several machines at once | [`docs/OLLAMA.md`](docs/OLLAMA.md) |
+| Deployment | `warnetech doctor`, a service image, air-gapped install, platform support | [`docs/DEPLOY.md`](docs/DEPLOY.md) |
+| Local weights | Run a model from a folder on disk with `transformers`: offline, opt-in, Python 3.11+ | [`docs/LOCAL_WEIGHTS.md`](docs/LOCAL_WEIGHTS.md) |
+| Custom models | Specs for Llama, Mistral and Gemma, `ollama create`, training-data tools, evals | [`docs/CUSTOM_MODELS.md`](docs/CUSTOM_MODELS.md) |
+| Routing | Sends each task to the model suited to it, and chains models into pipelines | [`docs/ROUTING.md`](docs/ROUTING.md) |
+| Interpreter | Natural-language code execution with approval, limits and an audit log | [`docs/INTERPRETER.md`](docs/INTERPRETER.md) |
+| Bundled repos | `claude-code-assist` and `CLI-AI-Command-Center-PRD`, offline | [`vendor/README.md`](vendor/README.md) |
+
+---
+
+## Install
+
+```bash
+pip install -e .                    # library only
+pip install -e ".[service]"         # + FastAPI HTTP service
+pip install -e ".[pgvector]"        # + Postgres/pgvector store
+pip install -e ".[dev]"             # + pytest, ruff
+```
+
+Python 3.10+.
+
+## 60 seconds
+
+Everything below runs with **no API keys** — `WARNETECH_OFFLINE=1` swaps in a
+deterministic local provider so a project's full code path works before anyone
+has provisioned anything.
+
+```bash
+cp .env.example .env
+WARNETECH_OFFLINE=1 python examples/quickstart.py
+```
+
+```python
+from warnetech_core import build
+
+gateway, memory = build(project="hub-notes")
+
+await memory.remember("hub-notes", "We chose Postgres for billing.", key="adr-1")
+
+context = await memory.get_context("hub-notes", "which database for billing?")
+reply = await gateway.complete("chat.default", f"{context.text}\n\nWhich DB?")
+
+print(reply.text, reply.cost_usd)
+```
+
+---
+
+## 1. AI Gateway
+
+### Model abstraction
+
+Downstream code names a **task**, never a provider model id:
+
+```python
+await gateway.complete("chat.default", "summarise this")
+```
+
+`chat.default` → `anthropic.claude-sonnet-4-5` → the Anthropic adapter. Changing
+what every project uses is one line — in code, or in `models.yaml`:
+
+```yaml
+aliases:
+  chat.default: openai.gpt-4o
+```
+
+`ModelRegistry` also holds pricing, context windows and fallback chains. See
+`models.yaml.example`. Built-in task aliases: `chat.default`, `chat.fast`,
+`chat.cheap`, `embed.default`, `embed.large`.
+
+Adding a provider means implementing one method:
+
+```python
+class MyProvider(Provider):
+    name = "mine"
+    async def complete(self, request, spec) -> CompletionResponse: ...
+
+gateway.register_provider(MyProvider())
+```
+
+Adapters translate one request and raise. Retry, limits, cost and logging stay
+in the gateway, so they behave identically no matter who is upstream. Any
+OpenAI-compatible endpoint (Together, Groq, local vLLM) works through
+`OpenAIProvider(base_url=...)` with no new adapter.
+
+Built-in providers: **Anthropic**, **OpenAI**, **NVIDIA** (`chat.nemotron` →
+`nvidia/nemotron-3-ultra`, the model Warnetech's firewall already uses), and an
+offline `echo` provider. NVIDIA is OpenAI-compatible but registered under its
+own provider name, so a Nemotron burst cannot spend OpenAI's rate-limit or cost
+budget.
+
+### Prompt registry
+
+Prompts are versioned data on disk, not literals in application code:
+
+```yaml
+# prompts/summarise.yaml
+- id: summarise.document
+  version: 2
+  model: chat.fast
+  messages:
+    - role: system
+      content: You are a precise summariser. Never invent facts.
+    - role: user
+      content: Summarise in at most {{ max_words }} words:\n\n{{ document }}
+```
+
+```python
+response = await gateway.complete_prompt(
+    "summarise.document",                # latest version
+    {"document": text, "max_words": 100},
+    project="hub-notes",
+)
+response = await gateway.complete_prompt("summarise.document", vars, version=1)  # pinned
+```
+
+- **Strict rendering.** A missing *or* unexpected variable raises at render
+  time. A typo'd `{{ documnet }}` never reaches a model.
+- **Immutable versions.** Re-registering a published `(id, version)` with
+  different content is refused — bump the version, so old usage rows stay
+  interpretable.
+- **Traceable.** Each template has a content checksum, recorded on every call
+  alongside its id and version.
+
+### Cost tracking
+
+Every call is attributed and recorded — successes *and* failures, because a call
+that burned three retries and failed still cost you something.
+
+```python
+gateway.usage.summary(group_by="project")     # or team, model_alias, provider,
+                                              # operation, prompt_id
+gateway.usage.recent(project="hub-notes", limit=50)
+```
+
+```bash
+warnetech usage --group-by project --hours 24
+```
+
+Optional trailing-window spend caps raise `BudgetExceeded` **before** dispatch:
+
+```bash
+WARNETECH_PROJECT_BUDGETS=hub-notes=5.00,hub-invoices=2.00
+WARNETECH_TEAM_BUDGETS=core=25.00
+```
+
+The check runs against spend already recorded, so one call can overshoot the cap
+— the alternative is predicting a response's token count before making it.
+
+### Retry, rate limiting, fallback
+
+One policy, inherited everywhere:
+
+- **Retry** — exponential backoff with full jitter. A server's `Retry-After`
+  always wins over our guess.
+- **Rate limiting** — per-provider token buckets smooth bursts under a provider's
+  RPM ceiling instead of discovering it via 429s.
+- **Fallback** — when a model exhausts its retries, the gateway walks its
+  fallback chain to another provider. The response records what it fell back
+  from.
+
+A 4xx (except 408/409/429) means *our request* was malformed — the gateway fails
+fast rather than replaying a broken payload down the whole chain.
+
+```python
+AIGateway(providers, retry=RetryPolicy(max_attempts=5), enable_fallback=True)
+```
+
+---
+
+## 2. Memory & context layer
+
+### Per-project namespacing
+
+The namespace is `project:scope`. **Isolation is the default and crossing it is
+explicit** — a hub app writing to `notes` cannot surface a record from
+`invoices` unless the caller names it:
+
+```python
+await memory.recall("hub-notes", "acme invoice")                          # notes only
+await memory.recall("hub-notes", "acme invoice", also_projects=["hub-invoices"])
+```
+
+`scope` sub-partitions within a project — a user id, a session, a collection:
+
+```python
+await memory.remember("hub", "Alice prefers tea.", scope="user-a")
+await memory.recall("hub", "drink preference", scope="user-a")
+await memory.recall("hub", "drink preference", scopes=["user-a", "user-b"])
+```
+
+### The retrieval API
+
+```python
+result = await memory.get_context("hub-notes", "what did we decide about X?")
+result.text     # formatted, citable block, packed to a token budget
+result.hits     # the records behind it, best first
+```
+
+`get_context` packs hits best-first until `max_tokens`; a record too large for
+the remaining budget is skipped rather than cut mid-sentence, and a smaller one
+behind it may still fit. `result.truncated` tells you when that happened.
+
+Storing:
+
+```python
+await memory.remember("hub-notes", "We chose Postgres.", key="adr-1",
+                      metadata={"kind": "decision"})
+await memory.remember_many("hub-notes", ["one", "two", "three"])   # one embed call
+await memory.remember("hub", "session state", key="s", ttl_seconds=3600)
+await memory.remember("hub", "opaque blob", key="k", embed=False)  # skips the embed cost
+```
+
+Writing the same `key` **updates in place** — id and creation time survive, so
+references held elsewhere stay valid. Records with a TTL disappear from every
+read the moment they expire; `purge_expired()` reclaims the storage.
+
+Filtering:
+
+```python
+await memory.recall("hub", q, metadata_filter={"kind": "decision"})
+await memory.recall("hub", q, metadata_filter={"kind": ["decision", "note"]})  # any of
+await memory.recall("hub", q, min_score=0.3)   # keep weak matches out of the prompt
+```
+
+### Pluggable storage
+
+| Backend | Use for | Setup |
+|---|---|---|
+| `InMemoryContextStore` | tests, short scripts | none |
+| `SQLiteContextStore` | **default** for local work | none, a file |
+| `SupabaseVectorStore` | **production** — the shared project | migration + DSN |
+| `PgVectorContextStore` | any Postgres you own | Postgres + `vector` |
+
+```bash
+WARNETECH_MEMORY_BACKEND=sqlite        # memory | sqlite | supabase | pgvector
+WARNETECH_MEMORY_PATH=./data/warnetech_memory.db
+```
+
+### Supabase (production)
+
+Warnetech's canonical wiring makes the existing Supabase project the single
+shared store. Apply the migration once, then point the backend at it:
+
+```bash
+psql "$WARNETECH_SUPABASE_DSN" -f migrations/0001_warnetech_memory.sql
+export WARNETECH_MEMORY_BACKEND=supabase
+export WARNETECH_SUPABASE_DSN=postgresql://postgres:...@db.<ref>.supabase.co:5432/postgres
+```
+
+The store **never issues DDL** against Supabase — `manage_schema` defaults to
+`False`, and a missing table raises pointing at the migration rather than
+silently creating one. That project holds other components' live data, and the
+migration is additive only (`CREATE … IF NOT EXISTS`, no `ALTER` beyond
+enabling RLS, no `DROP`); a test enforces it.
+
+Every record stores the `embed_model` that produced its vector, and searches
+filter on it. Swapping embedding models hides stale vectors rather than scoring
+this model's query against another model's vectors — which returns confident
+nonsense, not an error.
+
+SQLite stores vectors as float32 blobs and scores cosine similarity in Python:
+brute force over tens of thousands of records is milliseconds, with zero extra
+dependencies. Past that, switch to pgvector — the interface is identical, so
+nothing downstream changes.
+
+Adding a backend means implementing `ContextStore`. Stores handle persistence
+and filtering only; embedding, namespacing and context assembly stay in
+`MemoryService` so every backend behaves the same. The shared test suite runs
+against each store, so conformance is proven rather than assumed.
+
+---
+
+## Using it from synchronous code
+
+Most of Warnetech is synchronous. `SyncRunner` bridges to the async gateway on
+one long-lived loop thread — not `asyncio.run` per call, which fails inside an
+existing loop and rebuilds the `httpx` connection pool every time:
+
+```python
+from warnetech_core import AIGateway
+from warnetech_core.integrations import make_embed_fn
+
+gateway = AIGateway.from_env()
+embed = make_embed_fn(gateway, project="warnetech-firewall")
+
+vector = embed("SQL injection attempt on /login")   # plain sync call
+```
+
+`make_embed_fn` returns exactly the `Callable[[str], list[float]]` that
+`warnetech_ai_controller.embeddings` takes as `embed_fn`, so that module gets
+real embeddings — with retry, fallback and cost attribution — without changing.
+Use `make_batch_embed_fn` for a slice set: one provider call for N texts.
+
+## HTTP service (optional)
+
+**In-process is the canonical path.** Warnetech's wiring specification calls
+for direct Python imports rather than an HTTP layer, so if everything runs in
+one process, import the gateway and skip this section. The service exists only
+for projects deployed separately that still need one bill and one memory store.
+It wraps the gateway, never the control plane:
+
+```bash
+pip install -e ".[service]"
+export WARNETECH_API_TOKEN=$(openssl rand -hex 32)
+uvicorn warnetech_core.service.app:app --port 8080
+```
+
+**The service refuses to start without `WARNETECH_API_TOKEN`** rather than
+defaulting to open — a gateway holding every provider key is not something to
+leave unauthenticated. Set `WARNETECH_ALLOW_ANONYMOUS=1` to opt out deliberately
+for local work.
+
+| Method | Path | |
+|---|---|---|
+| GET | `/health` | public liveness |
+| GET | `/models` | registry, aliases, availability |
+| GET | `/prompts`, `/prompts/{id}` | templates and versions |
+| POST | `/v1/complete` | chat completion |
+| POST | `/v1/complete/prompt` | render a template and run it |
+| POST | `/v1/embed` | batch embeddings |
+| GET | `/v1/usage/summary`, `/v1/usage/recent` | cost reporting |
+| POST | `/v1/memory/remember` | store |
+| POST | `/v1/memory/recall` | semantic search |
+| POST | `/v1/memory/context` | retrieve + assemble |
+| GET/DELETE | `/v1/memory/{project}` | list / forget |
+
+Errors map to status codes: `402` over budget, `404` unknown model or prompt,
+`400` bad prompt variables, `502` every provider failed. Interactive docs at
+`/docs`.
+
+---
+
+## CLI
+
+```bash
+warnetech models                          # what does chat.default actually hit?
+warnetech prompts                         # templates, versions, checksums
+warnetech prompts summarise.document --version 2
+warnetech usage --group-by team --hours 24
+warnetech remember "Standup is at 09:30." --project hub-notes
+warnetech ask "when is standup?" --project hub-notes --with-memory
+```
+
+Local models, custom models, the interpreter and the bundled repos each have a
+command group. Every command takes at most four parameters.
+
+```bash
+warnetech ollama plan                     # local models and whether they fit this host
+warnetech ollama install general          # install one by role (or a raw tag)
+warnetech custom create warnetech-general # build a custom model from its spec
+warnetech custom eval config/evals/custom.yaml --model custom.general
+warnetech route explain "Summarise this meeting"   # which model, and why
+warnetech ollama nodes                    # which Ollama machines are up
+warnetech interpreter run "count lines in *.py" --mode dry-run
+warnetech vendor list                     # bundled repos and their source commits
+warnetech doctor                          # can this machine run it? (--json, --network)
+```
+
+## Configuration
+
+Everything is environment-driven; see `.env.example` for the full list.
+`build()` reads it and returns a wired gateway and memory service. Anything it
+does can also be done by hand when a project wants something unusual:
+
+```python
+gateway = AIGateway(
+    {"anthropic": AnthropicProvider()},
+    registry=my_registry,
+    usage=UsageTracker(SQLiteUsageStore("costs.db"), project_budgets_usd={"hub": 5.0}),
+    retry=RetryPolicy(max_attempts=5),
+)
+memory = MemoryService(gateway, SQLiteContextStore("memory.db"))
+```
+
+## Development
+
+```bash
+pip install -e ".[dev,service]"
+pytest              # 500+ tests, fully offline
+ruff check src tests
+```
+
+The suite needs no API keys and makes no network calls: provider adapters are
+driven through a mocked transport, and everything else runs against the
+deterministic `echo` provider. Memory tests are parametrised across both
+built-in stores.
+
+### Layout
+
+```
+src/warnetech_core/
+  gateway.py      AIGateway — dispatch, retry, fallback, accounting
+  registry.py     ModelSpec / ModelRegistry — aliases, pricing, fallbacks
+  usage.py        UsageRecord, stores, UsageTracker, budgets
+  resilience.py   RetryPolicy, TokenBucket, rate limiter registry
+  config.py       Settings.from_env(), build()
+  cli.py          `warnetech` command
+  sync.py         SyncRunner — async gateway from synchronous code
+  integrations/   make_embed_fn — warnetech_ai_controller bridge
+  providers/      base, http, anthropic, openai, nvidia, ollama, lmstudio, hf_local, echo (offline)
+  prompts/        PromptTemplate (versioned, strict), PromptRegistry
+  memory/         types, base, inmemory, sqlite, pgvector, supabase, service
+  service/        FastAPI app + schemas
+  agi/            reasoning, planning, tool use, reflection, orchestrator
+  interpreter/    workspace, executor, approval policy, audit log, model loop
+  runtime/        host resource probe, ollama CLI wrapper, local model catalogue
+  custom/         model specs, Modelfile, dataset tools, evals
+  routing/        task classifier, router, pipelines
+config/           local_models.yaml, custom_models/, evals/
+mcp-servers/      warnetech_mcp: MCP server (10 tools)
+scripts/          entry points and bootstrap scripts, vendor_sync.sh
+vendor/           bundled repos (git subtrees) and vendor.json
+```
 
 ## Status
 
-### Phase 1
-
-**Status:** CLOSED
-
-| Task | Description | Status |
-|---|---|---|
-| T1 | Planner duplicate-title dependency handling | ✅ Complete |
-| T2 | Stable `Goal.id` | ✅ Complete |
-| T3 | Capability metadata | ✅ Complete |
-| T4 | Confidence framework | ✅ Complete |
-| T5 | Telemetry | ✅ Complete |
-| T6 | Integration | ✅ Complete |
-| T7 | Documentation and final validation | ✅ Complete |
-
-### Phase 2
-
-**Status:** In progress. Plan: `docs/plans/2026-11-09-phase-2/plan.md`.
-
-Built, not yet wired into `AGIOrchestrator`:
-
-- `agi/state.py`: `AgentStateStore` (goal history) and `ReflectionHistory`.
-- `agi/tool_metrics.py`: `ToolMetrics` with Beta-posterior ranking and Thompson-sampling selection.
-
----
-
-# Phase 1
-
-## T1: Planner Dependency Handling
-
-The planner correctly handles duplicate task titles during dependency resolution.
-
-The implementation is located in:
-
-```text
-src/warnetech_core/agi/planning.py
-```
-
-The relevant logic is implemented in:
-
-```python
-_parse_tasks
-```
-
-A task title may correspond to multiple task IDs.
-
-When another task declares a dependency using that repeated title, the dependency resolves to **all matching task IDs** rather than an arbitrary single match.
-
-This ensures the dependent task waits for every task matching the referenced title.
-
-Regression coverage includes:
-
-```python
-test_duplicate_title_dependency_waits_for_every_match
-```
-
-in:
-
-```text
-tests/test_agi_planning.py
-```
-
----
-
-## T2: Stable Goal Identity
-
-Goals have stable identifiers through:
-
-```python
-Goal.id
-```
-
-The identifier provides a consistent correlation key across AGI execution.
-
-Conceptually:
-
-```text
-Goal
-├── id
-└── description
-```
-
-The goal ID can be associated with:
-
-- planning;
-- execution;
-- confidence results;
-- reflection;
-- telemetry;
-- future persistent state.
-
-The human-readable goal description should not be used as the primary identity of a goal.
-
----
-
-## T3: Capability Metadata
-
-Phase 1 introduces a metadata-only capability registry.
-
-Capability metadata can describe:
-
-```text
-Capability
-├── name
-├── description
-├── version
-└── dependencies
-```
-
-`ToolDefinition` also supports:
-
-```python
-version
-dependencies
-```
-
-with backwards-compatible defaults.
-
-### Important Runtime Limitation
-
-The capability registry is currently **stored but not read by the main execution loop**.
-
-It therefore provides capability metadata but does not currently perform autonomous capability selection.
-
-Do not describe the current runtime as:
-
-```text
-Planner
-    ↓
-Capability Registry
-    ↓
-Tool Selector
-```
-
-unless future implementation work actually connects those components in that manner.
-
-The documentation must describe the implemented system, not the intended future architecture.
-
----
-
-## T4: Confidence Framework
-
-Confidence scoring is implemented in:
-
-```text
-src/warnetech_core/agi/confidence.py
-```
-
-with tests in:
-
-```text
-tests/test_agi_confidence.py
-```
-
-Confidence values use the range:
-
-```text
-0.0 - 1.0
-```
-
-The framework is designed so that:
-
-- additional supporting evidence can increase confidence;
-- contradictions can reduce confidence;
-- values remain bounded between `0.0` and `1.0`;
-- scoring remains deterministic.
-
-### Current Runtime Behaviour
-
-Confidence is calculated **once at the end of a run**.
-
-It is not currently an intermediate routing mechanism between execution and reflection.
-
-Future architecture diagrams must preserve this distinction until the runtime behaviour changes.
-
----
-
-## T5: Telemetry
-
-Telemetry is implemented in:
-
-```text
-src/warnetech_core/agi/telemetry.py
-```
-
-with tests in:
-
-```text
-tests/test_agi_telemetry.py
-```
-
-Phase 1 uses JSONL telemetry.
-
-### Canonical Events
-
-The Phase 1 telemetry vocabulary is:
-
-```text
-goal_received
-plan_generated
-tool_selected
-execution_completed
-reflection_completed
-```
-
-Alternative names such as:
-
-```text
-goal_started
-goal_completed
-```
-
-should not be introduced independently.
-
-A single vocabulary keeps event producers and consumers consistent.
-
-Where appropriate, events should include:
-
-```text
-goal_id
-timestamp
-event
-metadata
-```
-
-so activity from one execution can be correlated.
-
----
-
-## Telemetry Import Path
-
-Telemetry is not currently re-exported from the AGI package's public package surface.
-
-Import it from its module:
-
-```python
-from warnetech_core.agi.telemetry import Telemetry, TelemetryEvent
-```
-
-The public API should not be expanded solely to make an incorrect documentation example work.
-
-The rule is:
-
-> Documentation describes the API that exists. The API is not changed simply to accommodate documentation that described something else.
-
----
-
-## T6: Integration
-
-Phase 1 components are integrated with the existing AGI implementation.
-
-Two implementation details are particularly important.
-
-### Capability Metadata
-
-The capability registry exists, but the current execution loop does **not** use it for autonomous capability selection.
-
-### Confidence
-
-Confidence is computed once at run completion rather than being used as an intermediate orchestration decision.
-
-The source code remains authoritative for the precise execution order.
-
-Future documentation should not imply functionality that has not yet been wired into the runtime.
-
----
-
-# Phase 1 Boundaries
-
-Phase 1 deliberately excludes persistent AGI state.
-
-Reflection information remains in memory.
-
-Phase 1 does **not** introduce:
-
-```text
-persistent reflection history
-persistent goal history
-tool performance history
-long-term agent state
-adaptive learning state
-```
-
-These responsibilities belong to Phase 2.
-
-This boundary keeps Phase 1 focused on execution infrastructure rather than mixing execution with persistence and learning.
-
----
-
-# Repository State Management
-
-The `.clawness` directory contains both runtime state and durable records.
-
-These must remain separate.
-
-## Runtime State
-
-The following files are runtime/session state and are git-ignored:
-
-```text
-.clawness/sessions.json
-.clawness/guard_sessions.json
-.clawness/handoff.md
-.clawness/handoff_autostart.json
-```
-
-## Durable Records
-
-Other `.clawness` files are project records and remain tracked:
-
-```text
-.clawness/memory.md
-.clawness/changelog.json
-.clawness/version.json
-.clawness/sast.json
-```
-
-Do **not** use broad ignore rules such as:
-
-```gitignore
-.clawness/*.json
-.clawness/*.md
-```
-
-because those patterns would also exclude durable records.
-
----
-
-# Performance Optimisation
-
-Automated optimisation is not part of Phase 1.
-
-Tools that rewrite code for performance should not be run merely because AGI files have recently changed.
-
-Phase 1 prioritises:
-
-1. correctness;
-2. deterministic behaviour;
-3. maintainability;
-4. test coverage;
-5. architectural consistency.
-
-Optimisation should be performed when a measurable performance issue exists and appropriate benchmarks can verify that behaviour remains correct.
-
----
-
-# Phase 2
-
-The existing roadmap (`docs/agi-roadmap.md`) remains the source of truth.
-
-Its Phase 2 structure is:
-
-```text
-Phase 2
-├── Reflection Engine
-├── Persistent State
-└── Tool Selection
-```
-
-Additional ideas are implementation tasks beneath these areas rather than a competing roadmap.
-
----
-
-## Reflection Engine
-
-```text
-Reflection Engine
-├── Reflection improvements
-├── Reflection history      (ReflectionHistory built)
-├── Outcome analysis
-└── Retry recommendations
-```
-
-The existing:
-
-```text
-src/warnetech_core/agi/reflection.py
-```
-
-should be extended rather than replaced with a parallel reflector implementation.
-
----
-
-## Persistent State
-
-```text
-Persistent State
-├── State store             (AgentStateStore built)
-├── Goal history            (AgentStateStore built)
-├── Reflection persistence
-└── Restart recovery
-```
-
-Persistence has an explicit schema and lifecycle rather than serialising arbitrary runtime objects.
-
-Telemetry and persistent state remain separate responsibilities.
-
----
-
-## Tool Selection
-
-```text
-Tool Selection
-├── Tool metrics            (ToolMetrics built)
-├── Cold-start prior        (Beta(1, 1): untried tool = 0.50)
-├── Tool ranking            (posterior-mean ranking built)
-└── Adaptive selection      (Thompson sampling built)
-```
-
-### Cold-Start Prior
-
-A naïve success rate (`successes / executions`) is undefined for an untried tool. Scoring it as `0.0` would make a new tool look like a consistently failing one.
-
-The implementation uses a Beta prior. With the default `Beta(1, 1)`, the posterior mean is `(successes + 1) / (trials + 2)`:
-
-```text
-0 / 0   -> 0.50
-1 / 1   -> 0.67
-10 / 10 -> 0.92
-0 / 10  -> 0.08
-```
-
-### Not Yet Settled
-
-- The ranking uses success rate only. Latency, confidence and capability compatibility are not yet combined into the score.
-- Thompson sampling is not yet wired into the orchestrator.
-
----
-
-# Architecture Principles
-
-## Extend Before Adding
-
-Before creating a new AGI component, determine whether the functionality belongs in an existing module.
-
-Avoid unnecessary parallel implementations of:
-
-```text
-planners
-tool registries
-reflectors
-orchestrators
-state systems
-```
-
----
-
-## Code Is Authoritative
-
-Documentation describes the running implementation.
-
-Future architecture should be explicitly labelled as future architecture.
-
----
-
-## Separation of Concerns
-
-```text
-Planning
-    → creates plans
-
-Tools
-    → execute operations
-
-Capability Metadata
-    → describes capabilities
-
-Confidence
-    → quantifies uncertainty
-
-Reflection
-    → evaluates outcomes
-
-Telemetry
-    → records observable events
-
-Persistent State
-    → stores durable AGI state
-```
-
-These responsibilities should remain separate unless there is a strong architectural reason to combine them.
-
----
-
-## Prefer Minimal Changes
-
-Extend stable components before replacing them.
-
-Prefer small, reviewable changes over large architecture rewrites.
-
----
-
-## Test Behaviour
-
-Regression tests should protect externally meaningful behaviour while allowing implementation details to evolve.
-
----
-
-## No Premature Autonomy
-
-Do not introduce autonomous routing, recursive execution, persistent learning or adaptive tool selection until the required state, metrics, decision rules, failure handling, tests and safety boundaries have been explicitly defined.
-
----
-
-# Development Progression
-
-```text
-Observe → Reason → Plan → Execute → Reflect → Remember → Improve
-```
-
-Phase 1 establishes the execution foundation.
-
-Phase 2 adds stateful reflection and tool-selection capabilities without replacing the existing architecture.
-
----
-
-# Next Step
-
-Wire `AgentStateStore`, `ReflectionHistory` and `ToolMetrics` into `AGIOrchestrator`, following the Phase 2 plan. This changes the run loop, so it needs explicit approval before implementation.
+`0.1.0`.
+
+- The pgvector and Supabase stores are written against psycopg3 and pgvector
+  but have **not been exercised against a live Postgres** — no database was
+  reachable from the environment they were built in. The in-memory and SQLite
+  stores are covered by the shared conformance suite. Treat the first
+  Supabase run as a smoke test.
+- `migrations/0001_warnetech_memory.sql` has not been applied anywhere yet.
+  Review it before running it against the shared project.
+- The Ollama commands (`ollama install`, `custom create`) have been tested
+  against a fake Ollama only. Run `warnetech custom create warnetech-general`
+  once on a real install, and confirm the model tags with `ollama show`.
+- The interpreter is not a sandbox. Approval of every action is the main
+  control; see [`docs/INTERPRETER.md`](docs/INTERPRETER.md).
+- `providers/provider_router.py` imports `aiohttp`, which is not a declared
+  dependency, and nothing else uses it yet.
+- Model prices in the built-in catalogue drift, and the Nemotron entry is
+  priced at zero because NVIDIA's rates were not confirmed. Override them in
+  `models.yaml` rather than trusting the table.
