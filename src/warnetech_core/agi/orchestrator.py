@@ -194,7 +194,9 @@ class AGIOrchestrator:
             )
             record.reasoning = reasoning
 
-            selected_name, selection_mode = self._select_tool_name(task)
+            selected_name, selection_mode, candidate_names, selection_reason = (
+                self._select_tool_name(task)
+            )
             if selected_name is not None:
                 tool_call = ToolCall(
                     tool_name=selected_name,
@@ -205,9 +207,12 @@ class AGIOrchestrator:
                     "task_id": task.id,
                     "tool_name": selected_name,
                 }
-                # Only metric-enabled runs add the field, so the default payload is unchanged.
+                # Only metric-enabled runs add these fields, so the default payload is unchanged.
                 if self._metric_selection:
                     selected_payload["selection_mode"] = selection_mode
+                    selected_payload["hinted_tool"] = task.tool_hint
+                    selected_payload["candidate_tools"] = candidate_names
+                    selected_payload["selection_reason"] = selection_reason
                 self._emit(TelemetryEvent.TOOL_SELECTED, goal.id, selected_payload)
                 call_started = time.perf_counter()
                 tool_result = await self.tools.execute(tool_call)
@@ -306,22 +311,29 @@ class AGIOrchestrator:
             confidence=confidence,
         )
 
-    def _select_tool_name(self, task: Any) -> tuple[str | None, str]:
-        """Pick the tool to execute for *task*. Returns (name or None, selection mode).
+    def _select_tool_name(self, task: Any) -> tuple[str | None, str, list[str], str]:
+        """Pick the tool to execute for *task*.
 
-        Disabled: the hint, as before. Enabled: the hint's candidates are ranked by
-        ToolMetrics. Ranking can only pick among candidates that resolve_candidates() approved.
+        Returns (selected name or None, selection mode, candidate names, reason code).
+        Decision logic is unchanged from the metric-selection contract. The extra values
+        only describe the decision that was made. They never influence it.
+
+        Reason codes map to real branches:
+          hint_default     no tool, or metric selection off
+          single_candidate metric selection on, only the hint resolved
+          metric_ranked    metric selection on, ranking chose among several candidates
         """
         hint = task.tool_hint
         if not hint or not self.tools.get(hint):
-            return None, "default"
+            return None, "default", [], "hint_default"
         if not self._metric_selection:
-            return hint, "default"
+            return hint, "default", [], "hint_default"
         candidates = resolve_candidates(hint, self.tools)
+        candidate_names = [candidate.name for candidate in candidates]
         if len(candidates) <= 1:
-            return hint, "default"
+            return hint, "default", candidate_names, "single_candidate"
         winner = pick_candidate(candidates, self.tool_metrics)
-        return winner.name, "metrics"
+        return winner.name, "metrics", candidate_names, "metric_ranked"
 
     def _persist(
         self,
