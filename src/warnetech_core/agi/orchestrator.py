@@ -10,14 +10,18 @@ from __future__ import annotations
 
 import logging
 import time
+from typing import Any
 
 from pydantic import BaseModel, Field
 
 from ..gateway import AIGateway
 from ..memory.service import MemoryService
+from .capability_registry import CapabilityRegistry
+from .confidence import ConfidenceScorer
 from .planning import Goal, Plan, Planner, PlanStatus
 from .reasoning import ReasoningEngine, ReasoningResult, ReasoningStrategy
-from .reflection import ReflectionResult, Reflector
+from .reflection import CritiqueSeverity, ReflectionResult, Reflector
+from .telemetry import Telemetry, TelemetryEvent
 from .tools import ToolCall, ToolRegistry, ToolResult
 
 log = logging.getLogger("warnetech.agi.orchestrator")
@@ -45,6 +49,8 @@ class OrchestratorResult(BaseModel):
     success: bool = False
     summary: str = ""
     total_ms: float = 0.0
+    # Heuristic score in [0, 1] from ConfidenceScorer (D4 inputs). None when no run started.
+    confidence: float | None = None
 
 
 class AGIOrchestrator:
@@ -74,6 +80,8 @@ class AGIOrchestrator:
         project: str = "agi",
         max_cycles: int = 20,
         max_retries_per_task: int = 2,
+        telemetry: Telemetry | None = None,
+        capabilities: CapabilityRegistry | None = None,
     ) -> None:
         self.gateway = gateway
         self.memory = memory
@@ -85,14 +93,30 @@ class AGIOrchestrator:
         self.project = project
         self.max_cycles = max_cycles
         self.max_retries_per_task = max_retries_per_task
+        # None disables telemetry entirely; events are only written when a sink is given.
+        self.telemetry = telemetry
+        # Stored for callers that share one registry; not read by the Phase 1 loop.
+        self.capabilities = capabilities
+        self._scorer = ConfidenceScorer()
 
     async def run(self, goal: Goal) -> OrchestratorResult:
         """Execute the full AGI loop for *goal*."""
         started = time.perf_counter()
         cycles: list[CycleRecord] = []
 
+        self._emit(
+            TelemetryEvent.GOAL_RECEIVED,
+            goal.id,
+            {"success_criteria": len(goal.success_criteria)},
+        )
         plan = await self.planner.decompose(goal)
+        self._emit(TelemetryEvent.PLAN_GENERATED, goal.id, {"task_count": len(plan.tasks)})
         if not plan.tasks:
+            self._emit(
+                TelemetryEvent.EXECUTION_COMPLETED,
+                goal.id,
+                {"success": False, "cycles": 0, "confidence": None},
+            )
             return OrchestratorResult(
                 goal=goal,
                 plan=plan,
@@ -144,6 +168,11 @@ class AGIOrchestrator:
                     tool_name=task.tool_hint,
                     arguments={"task": task.title, "description": task.description},
                 )
+                self._emit(
+                    TelemetryEvent.TOOL_SELECTED,
+                    goal.id,
+                    {"cycle": cycle_num, "task_id": task.id, "tool_name": task.tool_hint},
+                )
                 tool_result = await self.tools.execute(tool_call)
                 record.tool_results.append(tool_result)
 
@@ -159,6 +188,17 @@ class AGIOrchestrator:
                 criteria=goal.success_criteria,
             )
             record.reflection = reflection
+            self._emit(
+                TelemetryEvent.REFLECTION_COMPLETED,
+                goal.id,
+                {
+                    "cycle": cycle_num,
+                    "task_id": task.id,
+                    "critiques": len(reflection.critiques),
+                    "should_retry": reflection.should_retry,
+                    "has_errors": reflection.has_errors,
+                },
+            )
 
             if reflection.should_retry and retries.get(task.id, 0) < self.max_retries_per_task:
                 retries[task.id] = retries.get(task.id, 0) + 1
@@ -191,6 +231,17 @@ class AGIOrchestrator:
         plan.status = PlanStatus.COMPLETED if success else PlanStatus.FAILED
 
         summary = self._build_summary(plan, cycles, success)
+        confidence = self._score_confidence(cycles)
+
+        self._emit(
+            TelemetryEvent.EXECUTION_COMPLETED,
+            goal.id,
+            {
+                "success": success,
+                "cycles": len(cycles),
+                "confidence": confidence,
+            },
+        )
 
         return OrchestratorResult(
             goal=goal,
@@ -199,7 +250,34 @@ class AGIOrchestrator:
             success=success,
             summary=summary,
             total_ms=total_ms,
+            confidence=confidence,
         )
+
+    def _score_confidence(self, cycles: list[CycleRecord]) -> float:
+        """Apply the D4 mapping: evidence and contradictions counted across the run.
+
+        Evidence = successful tool results + completed tasks whose reflection had no critiques.
+        Contradictions = critiques with severity error or critical. Heuristic, not calibrated.
+        """
+        evidence = 0
+        contradictions = 0
+        for record in cycles:
+            evidence += sum(1 for result in record.tool_results if result.success)
+            reflection = record.reflection
+            if reflection is None:
+                continue
+            contradictions += sum(
+                1
+                for critique in reflection.critiques
+                if critique.severity in (CritiqueSeverity.ERROR, CritiqueSeverity.CRITICAL)
+            )
+            if record.outcome == "completed" and not reflection.critiques:
+                evidence += 1
+        return self._scorer.score(evidence, contradictions).score
+
+    def _emit(self, event: TelemetryEvent, goal_id: str, payload: dict[str, Any]) -> None:
+        if self.telemetry is not None:
+            self.telemetry.record(event, goal_id=goal_id, payload=payload)
 
     def _build_summary(self, plan: Plan, cycles: list[CycleRecord], success: bool) -> str:
         completed = [t for t in plan.tasks if t.status == PlanStatus.COMPLETED]
