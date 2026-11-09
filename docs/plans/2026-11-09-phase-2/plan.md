@@ -24,12 +24,12 @@ Source: `docs/agi-roadmap.md` (Phase 2 headings). Phase 1 closed at `c792a55`.
 | ID | Area | Task | Status |
 |---|---|---|---|
 | P2-1 | Reflection Engine | Reflection history store | built (`ReflectionHistory`) |
-| P2-2 | Reflection Engine | Outcome analysis: derive success and retry signal from `ReflectionResult` | not started |
+| P2-2 | Reflection Engine | Outcome analysis: derive success and retry signal from `ReflectionResult` | closed (`c5848a3`, `agi/outcome.py`) |
 | P2-3 | Persistent State | State store: goal history | built (`AgentStateStore`) |
-| P2-4 | Persistent State | Reflection persistence and restart recovery | built, tested (`tests/test_agi_persistence_versioning.py`) |
+| P2-4 | Persistent State | Reflection persistence and restart recovery | closed (`85ba6a7`) |
 | P2-5 | Tool Selection | Tool metrics store | built (`ToolMetrics`) |
 | P2-6 | Tool Selection | Beta(1, 1) ranking and Thompson selection | built (`ToolMetrics`) |
-| P2-7 | Integration | Opt-in wiring into `AGIOrchestrator` behind a constructor flag | built, tested (`tests/test_agi_phase2_wiring.py`) |
+| P2-7 | Integration | Opt-in wiring into `AGIOrchestrator` behind a constructor flag | closed (`874b8f1`, `2c44daf`) |
 
 ## Component boundaries
 
