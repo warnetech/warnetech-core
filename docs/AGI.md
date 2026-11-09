@@ -82,7 +82,8 @@ Each line is one JSON object with `goal_id`, `event`, `timestamp` (UTC) and
 |---|---|---|
 | `goal_received` | Start of run | `success_criteria` (count) |
 | `plan_generated` | After planning | `task_count` |
-| `tool_selected` | A `tool_hint` resolved to a registered tool | `cycle`, `task_id`, `tool_name` |
+| `tool_selected` | A `tool_hint` resolved to a registered tool | `cycle`, `task_id`, `tool_name`. With `enable_metric_selection=True` also `hinted_tool`, `candidate_tools` and `selection_reason` (`hint_default`, `single_candidate`, `metric_ranked`). `tool_name` is the tool that executes. |
+| `persistence_failed` | An opt-in Phase 2 write failed. The run continues | `goal_id`, `component`, `error_type` |
 | `reflection_completed` | After each cycle's reflection | `cycle`, `task_id`, `critiques`, `should_retry`, `has_errors` |
 | `execution_completed` | End of run, including the empty-plan case | `success`, `cycles`, `confidence` |
 
@@ -118,7 +119,7 @@ metadata is stored on the orchestrator but the loop does not consult it yet.
      output to the reasoning conclusion.
    - Reflect on the output against the success criteria.
 3. **Decide.** A low score or `should_retry` sends the task back, up to
-   `max_retries_per_task`. After that, a critical or error-level critique fails
+   `max_retries_per_task`. Current behaviour: the retry re-runs tool selection, so with metric selection on, a retry can execute a different candidate than the failed attempt. Retry-selection stability is a known gap, tracked as PB-4. The intended contract is that a retry keeps the tool selected for the original attempt. After that, a critical or error-level critique fails
    the task; otherwise it completes with the reflector's revised output if it
    gave one.
 4. **Stop** when every task is complete, a task fails (its dependents never
@@ -143,8 +144,7 @@ registry.register(
 orchestrator = AGIOrchestrator(gateway, tool_registry=registry)
 ```
 
-A tool runs only when a planned task names it in `tool_hint`. It receives the
-task's `task` and `description` as keyword arguments. Errors are caught and
+A tool runs only when a planned task names it in `tool_hint`, or, with metric selection on, when it is an approved candidate in the same `selection_group` as the hinted tool. The executed tool, not the hint, is the tool that receives the call. It receives the task's `task` and `description` as keyword arguments. Errors are caught and
 reported on the result; they do not stop the run.
 
 ## Supporting modules

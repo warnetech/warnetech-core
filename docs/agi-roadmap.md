@@ -44,7 +44,8 @@ Completed:
 
 Deliberately not done:
 
-- Runtime tool selection does not use `ToolMetrics` ranking. A tool that executes is still chosen by the existing rules. Metric-driven or adaptive selection changes which tool runs, so it needs its own approved specification first.
+- Metric-informed tool selection is opt-in (`enable_metric_selection=True`, off by default). It ranks only explicit `selection_group` candidates. Production selection groups are none, so no production tool is substituted.
+- Known gap: a retry re-runs tool selection and can execute a different candidate. This is tracked as PB-4 and is not approved failover.
 - `OutcomeAnalysis` is not persisted. It is derived from the persisted reflection.
 
 Plan: `docs/plans/2026-11-09-phase-2/plan.md`.

@@ -1,5 +1,5 @@
 ---
-status: audit complete, one decision required
+status: audit complete, F008 resolved as policy gap, closed
 baseline: a010d15
 ---
 
@@ -48,7 +48,7 @@ No production code was changed.
 - Reflection receives text only. `ReflectionResult` has no tool field.
 - Outcome analysis has no tool field.
 
-### PB3-F008 AMBIGUOUS, DECISION REQUIRED: retry reselects the tool
+### PB3-F008 POLICY GAP (resolved): retry reselects the tool
 - Location: `orchestrator.py` retry branch (around lines 245-260). A failed attempt sets the task back to `PENDING`, and the next cycle calls `_select_tool_name` again.
 - Effect: the failed attempt's outcome lowers that tool's ranking before the retry. With metric selection on, the retry can execute a different approved candidate. Probe: `hint` failed, then `alt` ran on retry.
 - Identity attribution is correct. Each attempt is recorded for the tool that ran.
@@ -57,7 +57,8 @@ No production code was changed.
 - Options for the owner:
   1. Retries keep the failed attempt's tool. Selection runs once per task. Requires a change, so a separate approved fix.
   2. Retries may reselect. Accept it and write a failover specification covering eligibility, limits, idempotency and telemetry.
-- PB-3 does not decide this. Changing it would be a behaviour change and an authority change, which PB-3 excludes.
+- Decision (recorded): an ordinary retry keeps the tool selected for the original attempt. Selection runs once per task retry sequence. Automatic reselection and failover are not approved. The runtime fix is deferred to PB-4 (retry selection stability) and is not part of PB-3.
+- Attribution remains correct: each attempt is recorded for the tool that ran.
 
 ### PB3-F009 DOCUMENTATION ONLY: docs coverage
 - The AGI README and PB-1 brief use `hinted`, `selected` and `executed` consistently.
@@ -72,12 +73,14 @@ No existing test covers retry after a failed attempt under metric selection. Add
 - CORRECT: 7 (F001-F007)
 - DEFECT: 0
 - AMBIGUOUS, decision required: 1 (F008)
-- DOCUMENTATION ONLY: 1 (F009), partial
+- DOCUMENTATION ONLY: 1 (F009), now corrected (see Documentation closure)
 
-## Stop condition reached
+## Documentation closure
 
-PB3-F008 needs a decision on failover semantics. Per the PB-3 stop conditions, it is reported and not implemented.
+Stale statements corrected:
+- `docs/agi-roadmap.md`: 'Runtime tool selection does not use ToolMetrics ranking' replaced with the opt-in description, plus the PB-4 retry gap.
+- `docs/AGI.md`: `tool_selected` payload, new `persistence_failed` row, the retry-reselection gap, and tool execution wording for metric selection.
 
-## Open decision
+## Closure
 
-Choose option 1 or option 2 for PB3-F008, then PB-3 can continue with the approved fix.
+PB-3 closed as an audit slice. Identity defects: 0. Policy gaps: 1 (F008, deferred to PB-4). No production code changed.
