@@ -1,5 +1,5 @@
 ---
-status: proposed, not approved for implementation
+status: implemented
 baseline: 9e5ce7a
 ---
 
@@ -104,3 +104,15 @@ Stop and report, without committing, if:
 ## Next step
 
 Approve or amend D1 through D5. Once approved, start with the red tests above.
+
+
+## Implementation record
+
+- Event: `tool_selected` only. No new event, no `SelectionDecision` type.
+- Metric-enabled payload adds `hinted_tool`, `candidate_tools` (resolver order, names only) and `selection_reason`, next to the existing `selection_mode`.
+- Default-off payload is unchanged: `cycle`, `task_id`, `tool_name`.
+- Reason codes, each tied to a real branch: `hint_default`, `single_candidate`, `metric_ranked`.
+- Limitation: `metric_ranked` covers both a metric win and a tie that keeps the hint. Telling them apart would mean recomputing ranking, which PB-1 forbids. A tie is still visible through `candidate_tools` and `tool_name`.
+- Tests: `tests/test_agi_selection_observability.py` (8 tests).
+- Sabotage checks O1 to O5 all turned tests red. The file was restored byte-identical.
+- Validation: 1047 passed, 2 skipped, lint clean.
