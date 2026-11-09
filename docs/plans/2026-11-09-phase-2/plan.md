@@ -39,9 +39,15 @@ Source: `docs/agi-roadmap.md` (Phase 2 headings). Phase 1 closed at `c792a55`.
 - `reflection.py` is extended, not replaced. P2-2 adds analysis helpers beside `Reflector`.
 - `tools.py` remains the only executor.
 
-## P2-2 outcome contract (PROPOSED, not approved)
+## P2-2 outcome contract (APPROVED)
 
-Implementation is blocked until this section is approved.
+Implemented in `agi/outcome.py`, tests in `tests/test_agi_outcome.py`.
+
+**Approved decisions:** confidence = `overall_quality`; no 0.70 threshold; invariant `success -> not retry`; invalid confidence raises `ValueError`.
+
+**Deviation from `_coerce.py`:** `unit_interval` clamps and returns a default. The approved contract forbids clamping, so P2-2 uses its own strict check. The 'follow `_coerce.py`' wording in the approval was taken to mean the error style, not the clamping.
+
+**Reason codes (approved):** `success`, `retry_recommended`, `failed`.
 
 ```python
 @dataclass(frozen=True, slots=True)

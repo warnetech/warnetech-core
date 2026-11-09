@@ -33,6 +33,8 @@ Wired into `AGIOrchestrator` behind `enable_phase2=True, state_dir=...` (off by 
 - `state.py`: `AgentStateStore` (goal history) and `ReflectionHistory`. JSON files, atomic writes.
 - `tool_metrics.py`: `ToolMetrics`. Beta(1, 1) posterior ranking and Thompson-sampling selection. An untried tool scores 0.50.
 
+- `outcome.py`: `analyze_outcome(reflection)` returns `OutcomeAnalysis` (success, retry recommendation, confidence, reason). Analysis only: nothing acts on the retry flag yet.
+
 Ranking and selection are recorded but not yet used to choose tools. That needs its own approval.
 
 ## Repository state
