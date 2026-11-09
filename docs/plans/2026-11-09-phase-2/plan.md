@@ -6,7 +6,12 @@ status: draft
 
 Source: `docs/agi-roadmap.md` (Phase 2 headings). Phase 1 closed at `c792a55`.
 
-**Gate:** Phase 2 modules `state.py` and `tool_metrics.py` were committed (`fc2dfa3`) before this plan was agreed. They are not called from `AGIOrchestrator`. Wiring them in is blocked until this plan is approved.
+**Gate decisions (approved):**
+
+- `fc2dfa3` landed before the plan was agreed. The modules stayed inert until P2-7, so they were kept, not reverted. The deviation is recorded here.
+- P2-7 is opt-in: `AGIOrchestrator(..., enable_phase2=True, state_dir=path)`. Default is off. `state_dir` without the flag, or the flag without `state_dir`, raises `ValueError`.
+- Persistence failures emit `persistence_failed` with payload `{component, error_type}` only. Exception messages are not written, since they may contain paths or request content. `execution_completed` is not reused.
+- P2-7 and the AC5/AC6 tests are the Phase 2 integration gate.
 
 ## Objectives
 
@@ -24,7 +29,7 @@ Source: `docs/agi-roadmap.md` (Phase 2 headings). Phase 1 closed at `c792a55`.
 | P2-4 | Persistent State | Reflection persistence and restart recovery | not started |
 | P2-5 | Tool Selection | Tool metrics store | built (`ToolMetrics`) |
 | P2-6 | Tool Selection | Beta(1, 1) ranking and Thompson selection | built (`ToolMetrics`) |
-| P2-7 | Integration | Opt-in wiring into `AGIOrchestrator` behind a constructor flag | not started, needs approval |
+| P2-7 | Integration | Opt-in wiring into `AGIOrchestrator` behind a constructor flag | built, tested (`tests/test_agi_phase2_wiring.py`) |
 
 ## Component boundaries
 
@@ -47,9 +52,9 @@ Source: `docs/agi-roadmap.md` (Phase 2 headings). Phase 1 closed at `c792a55`.
 - AC2: Corrupt JSON raises `StateError`. It is never silently treated as empty. (Test exists.)
 - AC3: Values outside their declared range are rejected. (Tests exist.)
 - AC4: An untried tool scores 0.50. (Test exists.)
-- AC5: With the flag off, `AGIOrchestrator` output and telemetry are identical to Phase 1. (Not written.)
-- AC6: With the flag on, one run writes one goal record and one reflection record. (Not written.)
-- AC7: After a restart, the store reloads prior records and ranking reflects them. (Not written.)
+- AC5: With the flag off, result and telemetry match Phase 1, and no Phase 2 files are written. (Test: `test_ac5_...`.)
+- AC6: With the flag on, one run writes a `running` and a final goal record, one reflection record, and tool outcomes. (Tests: `test_ac6_...`.)
+- AC7: After a restart, the store reloads prior records and ranking reflects them. (Test: `test_ac7_...`.)
 
 ## Failure behaviour
 
@@ -66,8 +71,7 @@ Source: `docs/agi-roadmap.md` (Phase 2 headings). Phase 1 closed at `c792a55`.
 ## Tests
 
 - Unit: `tests/test_agi_state.py`, `tests/test_agi_tool_metrics.py` (present).
-- Integration: scripted-gateway run with the flag on and off, asserting AC5 and AC6 (to write in P2-7).
-- Restart: write, drop the objects, reload, assert AC7 (to write in P2-4).
+- Integration: scripted-gateway runs with the flag on and off (AC5, AC6), failure path, restart (AC7). All in `tests/test_agi_phase2_wiring.py`.
 
 ## Out of scope
 

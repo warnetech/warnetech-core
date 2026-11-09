@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -21,7 +23,9 @@ from .confidence import ConfidenceScorer
 from .planning import Goal, Plan, Planner, PlanStatus
 from .reasoning import ReasoningEngine, ReasoningResult, ReasoningStrategy
 from .reflection import CritiqueSeverity, ReflectionResult, Reflector
+from .state import AgentStateStore, ReflectionHistory
 from .telemetry import Telemetry, TelemetryEvent
+from .tool_metrics import ToolMetrics
 from .tools import ToolCall, ToolRegistry, ToolResult
 
 log = logging.getLogger("warnetech.agi.orchestrator")
@@ -82,6 +86,8 @@ class AGIOrchestrator:
         max_retries_per_task: int = 2,
         telemetry: Telemetry | None = None,
         capabilities: CapabilityRegistry | None = None,
+        enable_phase2: bool = False,
+        state_dir: Path | None = None,
     ) -> None:
         self.gateway = gateway
         self.memory = memory
@@ -99,10 +105,25 @@ class AGIOrchestrator:
         self.capabilities = capabilities
         self._scorer = ConfidenceScorer()
 
+        # Phase 2 is off unless enable_phase2 is passed. Passing state_dir alone is an error,
+        # so the flag and the directory cannot disagree.
+        self._phase2 = enable_phase2
+        self._state_dir = Path(state_dir) if state_dir is not None else None
+        if enable_phase2 and self._state_dir is None:
+            raise ValueError("enable_phase2=True requires state_dir")
+        if not enable_phase2 and self._state_dir is not None:
+            raise ValueError("state_dir given without enable_phase2=True")
+        if enable_phase2:
+            self.goal_store = AgentStateStore(self._state_dir)
+            self.reflection_history = ReflectionHistory(self._state_dir)
+            self.tool_metrics = ToolMetrics.load(self._state_dir / "tool_metrics.json")
+
     async def run(self, goal: Goal) -> OrchestratorResult:
         """Execute the full AGI loop for *goal*."""
         started = time.perf_counter()
         cycles: list[CycleRecord] = []
+        self._persist(goal.id, "goal_store",
+                      lambda: self.goal_store.record_goal(goal.id, goal.description, "running"))
 
         self._emit(
             TelemetryEvent.GOAL_RECEIVED,
@@ -117,6 +138,8 @@ class AGIOrchestrator:
                 goal.id,
                 {"success": False, "cycles": 0, "confidence": None},
             )
+            self._persist(goal.id, "goal_store",
+                          lambda: self.goal_store.record_goal(goal.id, goal.description, "failed"))
             return OrchestratorResult(
                 goal=goal,
                 plan=plan,
@@ -173,8 +196,14 @@ class AGIOrchestrator:
                     goal.id,
                     {"cycle": cycle_num, "task_id": task.id, "tool_name": task.tool_hint},
                 )
+                call_started = time.perf_counter()
                 tool_result = await self.tools.execute(tool_call)
                 record.tool_results.append(tool_result)
+                elapsed_ms = (time.perf_counter() - call_started) * 1000
+                if self._phase2:
+                    self._persist(goal.id, "tool_metrics", self.tool_metrics.record,
+                                  task.tool_hint, success=tool_result.success,
+                                  latency_ms=elapsed_ms)
 
             output_text = reasoning.conclusion
             if record.tool_results:
@@ -188,6 +217,12 @@ class AGIOrchestrator:
                 criteria=goal.success_criteria,
             )
             record.reflection = reflection
+            if self._phase2:
+                self._persist(goal.id, "reflection_history", self.reflection_history.record,
+                              goal.id,
+                              overall_quality=reflection.overall_quality,
+                              should_retry=reflection.should_retry,
+                              critique_count=len(reflection.critiques))
             self._emit(
                 TelemetryEvent.REFLECTION_COMPLETED,
                 goal.id,
@@ -233,6 +268,11 @@ class AGIOrchestrator:
         summary = self._build_summary(plan, cycles, success)
         confidence = self._score_confidence(cycles)
 
+        self._persist(goal.id, "goal_store", lambda: self.goal_store.record_goal(
+            goal.id, goal.description, "completed" if success else "failed"))
+        self._persist(goal.id, "tool_metrics", lambda: self.tool_metrics.save(
+            self._state_dir / "tool_metrics.json"))
+
         self._emit(
             TelemetryEvent.EXECUTION_COMPLETED,
             goal.id,
@@ -252,6 +292,27 @@ class AGIOrchestrator:
             total_ms=total_ms,
             confidence=confidence,
         )
+
+    def _persist(
+        self,
+        goal_id: str,
+        component: str,
+        write: Callable[..., Any],
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        """Run one Phase 2 write. A failure is logged as an event and never stops the run."""
+        if not self._phase2:
+            return
+        try:
+            write(*args, **kwargs)
+        except Exception as exc:  # noqa: BLE001 - persistence must not break a run
+            log.warning("Phase 2 write to %s failed: %s", component, type(exc).__name__)
+            self._emit(
+                TelemetryEvent.PERSISTENCE_FAILED,
+                goal_id,
+                {"component": component, "error_type": type(exc).__name__},
+            )
 
     def _score_confidence(self, cycles: list[CycleRecord]) -> float:
         """Apply the D4 mapping: evidence and contradictions counted across the run.

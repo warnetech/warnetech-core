@@ -11,13 +11,15 @@ def _read_lines(path):
     return [json.loads(line) for line in path.read_text().splitlines()]
 
 
-def test_canonical_events_are_exactly_the_five_phase_one_events():
+def test_canonical_events_are_the_phase_one_events_plus_persistence_failed():
+    # persistence_failed was added by Phase 2 (P2-7). Nothing else may be added silently.
     assert [e.value for e in TelemetryEvent] == [
         "goal_received",
         "plan_generated",
         "tool_selected",
         "execution_completed",
         "reflection_completed",
+        "persistence_failed",
     ]
 
 

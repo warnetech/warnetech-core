@@ -23,6 +23,9 @@ class TelemetryEvent(str, Enum):
     TOOL_SELECTED = "tool_selected"
     EXECUTION_COMPLETED = "execution_completed"
     REFLECTION_COMPLETED = "reflection_completed"
+    # Emitted when an opt-in Phase 2 write fails. The run continues. Payload holds
+    # only the component name and the exception class, never its message.
+    PERSISTENCE_FAILED = "persistence_failed"
 
 
 class Telemetry:

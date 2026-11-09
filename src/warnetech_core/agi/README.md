@@ -21,19 +21,19 @@ Runtime limits:
 - The capability registry is stored but the run loop does not read it. Tools are not selected from metadata.
 - Confidence is computed once, when a run finishes. It does not gate execution or reflection.
 - Telemetry is not re-exported from the package. Import it as `from warnetech_core.agi.telemetry import Telemetry, TelemetryEvent`.
-- Canonical events: `goal_received`, `plan_generated`, `tool_selected`, `execution_completed`, `reflection_completed`.
-- Phase 1 keeps no state between runs. Reflections and goals live in memory.
+- Canonical events: `goal_received`, `plan_generated`, `tool_selected`, `execution_completed`, `reflection_completed`, and `persistence_failed` (added in Phase 2).
+- Phase 1 kept no state between runs. Phase 2 persistence is off unless `enable_phase2=True` and `state_dir` are both passed.
 
 ## Phase 2: in progress
 
 Plan: `docs/plans/2026-11-09-phase-2/plan.md`.
 
-Built, not yet called from `AGIOrchestrator`:
+Wired into `AGIOrchestrator` behind `enable_phase2=True, state_dir=...` (off by default):
 
 - `state.py`: `AgentStateStore` (goal history) and `ReflectionHistory`. JSON files, atomic writes.
 - `tool_metrics.py`: `ToolMetrics`. Beta(1, 1) posterior ranking and Thompson-sampling selection. An untried tool scores 0.50.
 
-Wiring these into the run loop changes orchestrator behaviour, so it needs approval first.
+Ranking and selection are recorded but not yet used to choose tools. That needs its own approval.
 
 ## Repository state
 
