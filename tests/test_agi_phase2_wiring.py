@@ -159,6 +159,9 @@ async def test_ac7_records_survive_a_new_orchestrator(tmp_path):
     )
     assert second.tool_metrics.stats("lookup").successes == 1
     assert AgentStateStore(state).latest_status("goal-3") == "completed"
+    reflections = ReflectionHistory(state).history("goal-3")
+    assert len(reflections) == 1
+    assert reflections[0].goal_id == "goal-3"
 
 
 # --- failure path: persistence errors never break the run -----------------

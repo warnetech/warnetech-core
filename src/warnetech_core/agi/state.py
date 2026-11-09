@@ -56,16 +56,43 @@ def _atomic_write_json(path: Path, data: Any) -> None:
         raise
 
 
-def _read_list(path: Path) -> list[dict[str, Any]]:
+SCHEMA_VERSION = 1
+
+
+def read_versioned(path: Path, key: str, default: Any) -> Any:
+    """Return ``doc[key]`` from a versioned state file, or *default* if the file is absent.
+
+    A file without ``schema_version``, or with one other than SCHEMA_VERSION, raises
+    StateError. Phase 2 has no unversioned production data to migrate, so silently
+    reading one as version 1 would hide a foreign or corrupt file.
+    """
     if not path.exists():
-        return []
+        return default
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        doc = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         raise StateError(f"corrupt state file: {path}") from exc
-    if not isinstance(data, list):
-        raise StateError(f"state file must hold a JSON list: {path}")
-    return data
+    if not isinstance(doc, dict):
+        raise StateError(f"state file must hold a JSON object: {path}")
+    if "schema_version" not in doc:
+        raise StateError(f"state file has no schema_version: {path}")
+    if doc["schema_version"] != SCHEMA_VERSION:
+        raise StateError(
+            f"unsupported schema_version {doc['schema_version']!r} in {path}"
+        )
+    value = doc.get(key, default)
+    if type(value) is not type(default):
+        raise StateError(f"state file field {key!r} has the wrong type: {path}")
+    return value
+
+
+def write_versioned(path: Path, key: str, payload: Any) -> None:
+    """Atomically write *payload* under *key*, stamped with SCHEMA_VERSION."""
+    _atomic_write_json(path, {"schema_version": SCHEMA_VERSION, key: payload})
+
+
+def _read_list(path: Path) -> list[dict[str, Any]]:
+    return read_versioned(path, "records", [])
 
 
 class AgentStateStore:
@@ -82,7 +109,7 @@ class AgentStateStore:
         record = GoalRecord(goal_id=goal_id, description=description, status=status)
         rows = _read_list(self._root / GOALS_FILE)
         rows.append(record.model_dump())
-        _atomic_write_json(self._root / GOALS_FILE, rows)
+        write_versioned(self._root / GOALS_FILE, "records", rows)
         return record
 
     def goal_history(self, goal_id: str) -> list[GoalRecord]:
@@ -117,7 +144,7 @@ class ReflectionHistory:
         )
         rows = _read_list(self._root / REFLECTIONS_FILE)
         rows.append(record.model_dump())
-        _atomic_write_json(self._root / REFLECTIONS_FILE, rows)
+        write_versioned(self._root / REFLECTIONS_FILE, "records", rows)
         return record
 
     def history(self, goal_id: str | None = None) -> list[ReflectionRecord]:

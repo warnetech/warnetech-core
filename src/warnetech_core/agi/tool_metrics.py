@@ -8,14 +8,13 @@ little data still get explored. Stdlib only, no model calls.
 
 from __future__ import annotations
 
-import json
 import random
 from collections.abc import Iterable
 from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from .state import StateError
+from .state import read_versioned, write_versioned
 
 
 class ToolStats(BaseModel):
@@ -113,7 +112,7 @@ class ToolMetrics:
 
     def save(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(self.to_dict(), indent=2, sort_keys=True), encoding="utf-8")
+        write_versioned(path, "tools", self.to_dict())
 
     @classmethod
     def load(
@@ -126,10 +125,7 @@ class ToolMetrics:
         metrics = cls(prior_alpha=prior_alpha, prior_beta=prior_beta)
         if not path.exists():
             return metrics
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as exc:
-            raise StateError(f"corrupt tool metrics file: {path}") from exc
+        data = read_versioned(path, "tools", {})
         for name, raw in data.items():
             metrics._stats[name] = ToolStats(**raw)
         return metrics
