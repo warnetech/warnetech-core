@@ -1,31 +1,17 @@
-# Handoff — Research Complete, PRD Ready to Write
+# Handoff — Cloudflare provider setup
 
-## Done
-- ✅ Fixed Python 3.8 support (downgraded deps: pydantic<2.6, httpx>=0.24)
-- ✅ Fixed package naming (src/warnetech-core → src/warnetech_core, pyproject.toml packages line)
-- ✅ CLI works: `python -m warnetech_core.cli ask "test"` returns `echo:test`
-- ✅ Codeflash setup (installed, authenticated, permissions configured)
-- ✅ Research completed: LiteLLM, Click/Typer, Chroma, MCP, cross-platform considerations
+Decided: own provider adapters (not LiteLLM); CLI + SQLite log shaped like simonw `llm`; first real provider = Cloudflare Workers AI; storage = R2 (objects) + D1 (memory); Supabase NOT for GPU (CPU only, per its compute docs). PRD draft: /tmp/claude-0/-home-user-warnetech-core/e0bb36d0-f77c-52ed-94cf-b95122460aa4/scratchpad/PRD.md (not in repo).
 
-## Research Findings Saved
-File: `/tmp/claude-0/-home-user-warnetech-core/ec414b77-e092-5d59-aace-f65b06a5b9e7/scratchpad/findings.md`
-- Competitive analysis (warnetech-core vs LiteLLM, vLLM, Langchain, CrewAI)
-- Key gaps identified: no CLI + gateway + agents + memory combo exists
-- Windows 7 + Termux compatibility notes
-- Recommendations: use Click/Typer + Chroma for memory
+Stopped at: Cloudflare credentials. Earlier token in the old environment was rejected ("Invalid API Token"). The user has the Account ID, API token and R2 Secret Access Key, but they must be entered via request_credential in THIS environment. R2 Access Key ID was pasted in chat (not stored).
 
-## Next Action
-Create PRD document using research findings. Write to `/tmp/claude-0/.../scratchpad/PRD.md`:
-1. Executive summary positioning warnetech-core
-2. Phase 1 (MVP): CLI framework, basic gateway, offline mode
-3. Phase 2: Memory integration, multi-provider routing
-4. Phase 3: AGI capabilities, MCP servers
-5. Technical stack recommendations (Click, Chroma, pathlib for cross-platform)
+Next action: request_credential for api.cloudflare.com (bearer), then `curl -sS https://api.cloudflare.com/client/v4/user/tokens/verify` must return success:true. Then add src/warnetech_core/providers/workers_ai.py (Provider subclass, base.py) + tests/test_workers_ai.py with the account ID read from env var CLOUDFLARE_ACCOUNT_ID.
 
-## Open Questions
-- None — user confirmed: use codeflash CLI patterns as reference, don't bundle
+Blockers / notes:
+- Tests: use /usr/bin/python3.11 (3.13 can't build pydantic-core).
+- CLAUDE.md rule "one shared Supabase project, no new stores" conflicts with R2/D1; user approved R2/D1 in chat, rule not yet updated.
+- docs/PRD.md is a different product (input-defense); unresolved.
+- Docs wiki offer unanswered.
 
-## Uncommitted Changes
-- None (all committed and pushed)
-
-**Autostart:** yes
+Open questions: none.
+Uncommitted: none beyond this file.
+**Autostart:** no

@@ -1,6 +1,10 @@
 {
-  "pypi.org": {
+  "api.cloudflare.com": {
     "verdict": false,
-    "ts": 1793786835.753643
+    "ts": 1794690436.4169512
+  },
+  "claude.ai": {
+    "verdict": false,
+    "ts": 1794690436.4355326
   }
 }
