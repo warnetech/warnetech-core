@@ -1,31 +1,15 @@
-# Handoff — Research Complete, PRD Ready to Write
+# Handoff — PRD drafted, awaiting decisions
 
-## Done
-- ✅ Fixed Python 3.8 support (downgraded deps: pydantic<2.6, httpx>=0.24)
-- ✅ Fixed package naming (src/warnetech-core → src/warnetech_core, pyproject.toml packages line)
-- ✅ CLI works: `python -m warnetech_core.cli ask "test"` returns `echo:test`
-- ✅ Codeflash setup (installed, authenticated, permissions configured)
-- ✅ Research completed: LiteLLM, Click/Typer, Chroma, MCP, cross-platform considerations
+Done: PRD draft at /tmp/claude-0/-home-user-warnetech-core/e0bb36d0-f77c-52ed-94cf-b95122460aa4/scratchpad/PRD.md (not in repo). Research rebuilt this session (LiteLLM, RouteLLM, Mem0, Pydantic AI, CrewAI, LLM CLI, local runners). Clawness state files committed/pushed to claude/warnetech-llm-cli-vlwjbg (8473b9f).
 
-## Research Findings Saved
-File: `/tmp/claude-0/-home-user-warnetech-core/ec414b77-e092-5d59-aace-f65b06a5b9e7/scratchpad/findings.md`
-- Competitive analysis (warnetech-core vs LiteLLM, vLLM, Langchain, CrewAI)
-- Key gaps identified: no CLI + gateway + agents + memory combo exists
-- Windows 7 + Termux compatibility notes
-- Recommendations: use Click/Typer + Chroma for memory
+Stopped at: waiting on user answers to PRD §9.
+Next action: once user answers §9 (LiteLLM backend? canonical PRD vs docs/PRD.md? first provider? JSONL memory default?), write the Phase 1 plan as docs/plans/<date>-phase1-cli/plan.md on the branch.
 
-## Next Action
-Create PRD document using research findings. Write to `/tmp/claude-0/.../scratchpad/PRD.md`:
-1. Executive summary positioning warnetech-core
-2. Phase 1 (MVP): CLI framework, basic gateway, offline mode
-3. Phase 2: Memory integration, multi-provider routing
-4. Phase 3: AGI capabilities, MCP servers
-5. Technical stack recommendations (Click, Chroma, pathlib for cross-platform)
+Blockers/notes:
+- pytest can't run here: Python 3.13, pydantic-core fails to build. Fix env or use 3.11/3.12 before any Phase 1 code.
+- docs/PRD.md describes a different product (input-defense); conflict unresolved.
+- Offered docs wiki (/project-docs-setup --lite); unanswered.
 
-## Open Questions
-- None — user confirmed: use codeflash CLI patterns as reference, don't bundle
-
-## Uncommitted Changes
-- None (all committed and pushed)
-
-**Autostart:** yes
+Open questions: PRD §9 (four items above).
+Uncommitted: none.
+**Autostart:** no
