@@ -8,3 +8,5 @@
 ## Always
 
 ## Lessons
+- Hardware: Toshiba Portege Z30t-A (i7-4600U, 16GB, Win10 Pro) = expendable project/test box; runs hot.
+- Hardware: ThinkPad 20ET (i5-6200U, 8GB, Win10 Pro via Win7 upgrade) = keep-for-years; no risky changes.

@@ -7,11 +7,11 @@ name = "warnetech-core"
 version = "0.1.0"
 description = "Shared AI gateway and memory/context layer for Warnetech projects."
 readme = "README.md"
-requires-python = ">=3.8,<4.0"
+requires-python = ">=3.10,<4.0"
 license = { text = "MIT" }
 dependencies = [
     "httpx>=0.24",
-    "pydantic>=2.0,<2.6",
+    "pydantic>=2.6,<3",
     "pyyaml>=6.0",
 ]
 
@@ -26,14 +26,15 @@ hf = [
     "accelerate>=1; python_version >= '3.11'",
 ]
 dev = [
+    "fastapi>=0.110",
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "ruff>=0.4",
 ]
 
 [project.scripts]
-warnetech = "warnetech-core.cli:main"
-warnetech_memory = "warnetech-core.memory.warnetech_memory:main"
+warnetech = "warnetech_core.cli:main"
+warnetech_memory = "warnetech_core.memory.warnetech_memory:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/warnetech_core"]
@@ -44,7 +45,7 @@ asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 100
-target-version = "py38"
+target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
