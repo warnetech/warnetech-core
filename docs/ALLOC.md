@@ -33,6 +33,26 @@ Exit codes: `0` ok, `1` audit found problems, `2` bad usage or rules file.
 
 **Decided:** files between `active_days` and `reference_days` (14 to 30 days old) are P1. The plan left this band undefined.
 
+## Recovery
+
+Every index write is one locked, fsynced append, so the CLI and the dashboard can write at the same time and a crash cannot corrupt earlier records. A crash can still leave the index and the stored files disagreeing:
+
+- a file was copied or moved but its index line was never written (an **orphan**), or
+- an index line points at a file that has since moved or been lost.
+
+`warnetech-alloc audit` reports both. `warnetech-alloc audit --repair` fixes what it safely can, after copying the index to `index.jsonl.bak`. It never deletes a file:
+
+| Situation | What repair does |
+|---|---|
+| Record's file is gone, same content elsewhere in the tier folders | Relinks the record to it |
+| Record's file is gone, original still exists unchanged | Copies the original back |
+| Stored file has no record | Re-indexes it; priority inferred from its tier folder |
+| Stored file duplicates content already indexed | Leaves it in place and reports it |
+| Original changed or gone, no copy anywhere | Reports it as still missing |
+| Index path escapes the allocation folder | Not touched; `audit` reports it |
+
+Repair is CLI-only on purpose; the dashboard's audit is read-only. A manual override and its memory record are replaced together; if memory was left behind by a crash, re-run `ingest --apply --memory` on the original folder.
+
 ## Dashboard
 
 ```bash

@@ -50,3 +50,5 @@ warnetech_memory delete <id>
 - Path: `--store`, else `WARNETECH_RAG_STORE_PATH`, else `data/rag_store.jsonl` under the nearest folder with `pyproject.toml`.
 - Earlier prototype files (`created_at` and `text` only) still load.
 - Measured here: loading 10,000 records and searching them took 0.21 s. Search reads the whole file each time, so a very large store will be slower.
+
+`warnetech_memory.add_many(path, notes)` adds many notes with one read and one write of the store (same rules as `add`; every note is validated before anything is written). `warnetech-alloc ingest --memory` uses it, which keeps large ingests linear.

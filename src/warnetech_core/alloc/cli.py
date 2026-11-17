@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 
 from .rules import Priority, load_rules
-from .store import audit, ingest, scan
+from .store import audit, ingest, repair, scan
 
 _DEFAULT_DEST = "data/alloc"
 
@@ -70,13 +70,33 @@ def cmd_ingest(args: argparse.Namespace) -> int:
     return 0
 
 
+def _print_repair(report) -> None:  # type: ignore[no-untyped-def]
+    if report.backup:
+        print(f"Index backed up to {report.backup}")
+    for label, values in (("relinked", report.relinked),
+                          ("restored from original", report.restored),
+                          ("re-indexed orphan", report.reindexed),
+                          ("stray duplicate left in place", report.leftover),
+                          ("still missing (no copy found)", report.still_missing)):
+        for value in values:
+            print(f"{label}: {value}")
+    if not any((report.relinked, report.restored, report.reindexed, report.leftover,
+                report.still_missing)):
+        print("Nothing to repair.")
+
+
 def cmd_audit(args: argparse.Namespace) -> int:
     rules = _rules(args)
+    if args.repair:
+        _print_repair(repair(_dest(args), time.time()))
+        print()
     report = audit(_dest(args), rules)
     print(f"Indexed records: {report.total}  corrupt index lines skipped: {report.corrupt_lines}")
     for tier, used in sorted(report.usage_bytes.items()):
         print(f"  tier{tier}: {used} bytes")
-    for label, values in (("missing", report.missing), ("changed since ingest", report.changed)):
+    for label, values in (("missing", report.missing), ("changed since ingest", report.changed),
+                          ("stored file with no index record", report.orphans),
+                          ("path not allowed", report.unsafe)):
         for value in values:
             print(f"{label}: {value}")
     for tier, used in report.over_quota.items():
@@ -111,6 +131,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("audit", help="check index against disk and tier quotas")
     p.add_argument("--dest", help="allocation directory (or WARNETECH_ALLOC_DIR)")
+    p.add_argument("--repair", action="store_true",
+                   help="first fix index/file mismatches (backs up the index; deletes nothing)")
     common(p)
     p.set_defaults(func=cmd_audit)
     return parser

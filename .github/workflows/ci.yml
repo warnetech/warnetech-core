@@ -12,7 +12,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
         include:
           - os: macos-latest
             python-version: "3.12"
@@ -41,3 +41,36 @@ jobs:
         run: python examples/quickstart.py
       - name: AI controller integration runs offline
         run: python examples/ai_controller_integration.py
+
+  # The two install bugs that shipped before (a bad entry point, an old pydantic cap) only
+  # showed up when the built package was installed, so install the built wheel and run it.
+  wheel-smoke:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Build the wheel
+        run: pip wheel . --no-deps -w dist
+      - name: Install it into a clean environment
+        run: |
+          python -m venv smoke
+          PY=$(ls smoke/bin/python 2>/dev/null || echo smoke/Scripts/python)
+          "$PY" -m pip install dist/*.whl
+          echo "PY=$PY" >> "$GITHUB_ENV"
+      - name: Run the installed commands
+        env:
+          WARNETECH_OFFLINE: "1"
+        run: |
+          "$PY" -m warnetech_core.cli ask hello
+          "$PY" -m warnetech_core.alloc.cli --help
+          "$PY" -c "import warnetech_core.alloc, warnetech_core.memory.warnetech_memory"
+          "$PY" -c "import pathlib, warnetech_core; print(pathlib.Path(warnetech_core.__file__).parent)"

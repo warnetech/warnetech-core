@@ -126,8 +126,15 @@ def build_alloc_router(require_token) -> APIRouter:
         if not _SHA256.fullmatch(body.sha256):
             raise HTTPException(status_code=400, detail="sha256 must be 64 hex characters")
         try:
-            return _row(reallocate(_alloc_dir(), body.sha256, body.priority, time.time()))
+            return _row(
+                reallocate(
+                    _alloc_dir(), body.sha256, body.priority, time.time(),
+                    memory_path=warnetech_memory.default_store_path(), rules=_rules(),
+                )
+            )
         except OverrideError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from None
+        except TimeoutError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from None
 
     @router.get("/ui/api/alloc/audit", dependencies=guard)
@@ -139,6 +146,7 @@ def build_alloc_router(require_token) -> APIRouter:
             "missing": list(report.missing),
             "changed": list(report.changed),
             "unsafe": list(report.unsafe),
+            "orphans": list(report.orphans),
             "over_quota": report.over_quota,
             "corrupt_lines": report.corrupt_lines,
             "usage_bytes": report.usage_bytes,

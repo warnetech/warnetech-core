@@ -7,6 +7,7 @@ metadata only, which matches the plan (tier 2 is metadata-only, tier 3 is quaran
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from pathlib import Path
 
 from warnetech_core.memory import warnetech_memory
@@ -55,21 +56,41 @@ def memory_text(item: Classification, head: str | None) -> str:
     )
     body = safe_head(Path(item.path), head)
     if body and item.priority in _TEXT_PRIORITIES and item.tier is not Tier.QUARANTINE:
-        return f"{header}\n{body.strip()}"
-    return header
+        return f"{header}\n{body.strip()}"[: warnetech_memory.MAX_TEXT_CHARS]
+    return header[: warnetech_memory.MAX_TEXT_CHARS]
+
+
+def _meta(item: Classification) -> dict[str, object]:
+    return {
+        "priority": item.priority.value,
+        "tier": int(item.tier),
+        "sha256": item.sha256,
+        "size": item.size,
+    }
 
 
 def index_item(memory_path: Path, item: Classification, head: str | None) -> str:
     """Store one item. Returns the memory status: "stored" or "duplicate"."""
     result = warnetech_memory.add(
-        memory_path,
-        memory_text(item, head),
-        source=item.path,
-        meta={
-            "priority": item.priority.value,
-            "tier": int(item.tier),
-            "sha256": item.sha256,
-            "size": item.size,
-        },
+        memory_path, memory_text(item, head), source=item.path, meta=_meta(item)
     )
     return result.status
+
+
+def index_items(memory_path: Path, items: Sequence[tuple[Classification, str | None]]) -> int:
+    """Store many items with one read and one write of the memory store. Returns how many
+    were new."""
+    results = warnetech_memory.add_many(
+        memory_path,
+        [(memory_text(item, head), item.path, _meta(item)) for item, head in items],
+    )
+    return sum(1 for r in results if r.status == "stored")
+
+
+def resync_item(memory_path: Path, item: Classification, head: str | None) -> None:
+    """Replace the memory record(s) for this file's content, so memory shows its current
+    priority and tier."""
+    for record in warnetech_memory.load(memory_path).records:
+        if record.meta.get("sha256") == item.sha256:
+            warnetech_memory.delete(memory_path, record.id)
+    index_item(memory_path, item, head)

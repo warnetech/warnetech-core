@@ -203,6 +203,7 @@ th{color:var(--muted);font-weight:600}
       a.missing.forEach(function (m) { lines.push("missing: " + m); });
       a.changed.forEach(function (m) { lines.push("changed since ingest: " + m); });
       a.unsafe.forEach(function (m) { lines.push("path not allowed: " + m); });
+      (a.orphans || []).forEach(function (m) { lines.push("stored file with no index record: " + m); });
       Object.keys(a.over_quota).forEach(function (t) { lines.push("over quota: tier " + t); });
       lines.push(a.ok ? "OK" : "PROBLEMS FOUND");
       say($("auditout"), lines.join("\n"), a.ok ? "ok" : "bad");

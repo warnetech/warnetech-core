@@ -27,7 +27,7 @@ import time
 import unicodedata
 import uuid
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -144,17 +144,27 @@ def load(path: Path) -> Loaded:
 def _append(path: Path, obj: Mapping[str, Any]) -> None:
     """Append one line. A file that ends mid-line (a crash) is closed off first, so the
     new line is not glued onto the damaged one."""
+    _append_many(path, [obj])
+
+
+def _append_many(path: Path, objs: Sequence[Mapping[str, Any]]) -> None:
+    """Append several lines with one write and one fsync (same crash handling as ``_append``)."""
+    if not objs:
+        return
     path.parent.mkdir(parents=True, exist_ok=True)
-    line = json.dumps(obj, ensure_ascii=False, separators=(",", ":")).encode("utf-8") + b"\n"
+    payload = b"".join(
+        json.dumps(o, ensure_ascii=False, separators=(",", ":")).encode("utf-8") + b"\n"
+        for o in objs
+    )
     with path.open("a+b") as handle:
         handle.seek(0, os.SEEK_END)
         size = handle.tell()
         if size:
             handle.seek(size - 1)
             if handle.read(1) != b"\n":
-                line = b"\n" + line
+                payload = b"\n" + payload
             handle.seek(0, os.SEEK_END)
-        handle.write(line)
+        handle.write(payload)
         handle.flush()
         os.fsync(handle.fileno())
 
@@ -184,6 +194,43 @@ def add(path: Path, text: str, *, source: str | None = None,
     _append(path, {"id": rid, "ts": now, "source": source or "", "text": clean,
                    "sha256": digest, "meta": dict(meta or {})})
     return AddResult("stored", rid)
+
+
+def add_many(
+    path: Path, notes: Iterable[tuple[str, str | None, Mapping[str, Any] | None]]
+) -> list[AddResult]:
+    """``add`` for many notes at once: the store is read once and written once.
+
+    Each note is ``(text, source, meta)``. The rules are the same as ``add``. Every note is
+    validated before anything is written, so a bad note stops the whole batch cleanly.
+    """
+    live = {r.sha256: r for r in load(path).records}
+    now = time.time()
+    lines: list[dict[str, Any]] = []
+    results: list[AddResult] = []
+    for text, source, meta in notes:
+        clean = text.replace("\x00", "").strip()
+        if not clean:
+            raise ValueError("text is empty")
+        if len(clean) > MAX_TEXT_CHARS:
+            raise ValueError(f"text is longer than {MAX_TEXT_CHARS} characters")
+        digest = content_hash(clean)
+        existing = live.get(digest)
+        if existing is not None:
+            if source and source not in existing.sources:
+                lines.append({"id": existing.id, "ts": now, "add_source": source})
+                live[digest] = Record(existing.id, existing.ts, existing.text, existing.sha256,
+                                      (*existing.sources, source), existing.meta)
+            results.append(AddResult("duplicate", existing.id))
+            continue
+        rid = uuid.uuid4().hex
+        lines.append({"id": rid, "ts": now, "source": source or "", "text": clean,
+                      "sha256": digest, "meta": dict(meta or {})})
+        live[digest] = Record(rid, now, clean, digest, (source,) if source else (),
+                              dict(meta or {}))
+        results.append(AddResult("stored", rid))
+    _append_many(path, lines)
+    return results
 
 
 def delete(path: Path, record_id: str) -> bool:

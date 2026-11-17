@@ -218,3 +218,20 @@ def test_existing_ui_still_works_alongside(env):
     assert client.get("/ui").status_code == 200
     assert client.get("/health").status_code == 200
     assert os.environ["WARNETECH_ALLOC_DIR"]
+
+
+def test_dashboard_override_updates_the_memory_inspector(env):
+    client, _ = env
+    digest = sha_of(client, "plan.md")
+    client.post("/ui/api/alloc/override", json={"sha256": digest, "priority": "P0"})
+    hits = client.get("/ui/api/alloc/memory", params={"q": "quokka"}).json()["hits"]
+    assert len(hits) == 1
+    assert hits[0]["meta"]["priority"] == "P0"
+
+
+def test_dashboard_audit_reports_orphans(env):
+    client, dest = env
+    (dest / "tier1_warm" / "stray.txt").write_text("nobody indexed me")
+    audit_result = client.get("/ui/api/alloc/audit").json()
+    assert audit_result["ok"] is False
+    assert [Path(p).name for p in audit_result["orphans"]] == ["stray.txt"]
