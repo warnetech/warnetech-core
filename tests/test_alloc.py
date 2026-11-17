@@ -292,3 +292,29 @@ def test_reingest_does_not_duplicate_memory_records(tmp_path):
     ingest(src, dest, Rules(), NOW, apply=True, memory_path=mem)
     ingest(src, dest, Rules(), NOW, apply=True, memory_path=mem)
     assert len(warnetech_memory.load(mem).records) == 1
+
+
+def test_secret_named_file_is_header_only_in_memory(tmp_path):
+    src, dest, mem = tmp_path / "src", tmp_path / "dest", tmp_path / "memory.jsonl"
+    make(src / "id_rsa", b"-----BEGIN OPENSSH PRIVATE KEY-----\nAAAA", age_days=1)
+    ingest(src, dest, Rules(), NOW, apply=True, memory_path=mem)
+    record = warnetech_memory.load(mem).records[0]
+    assert "AAAA" not in record.text
+    assert "PRIVATE KEY" not in record.text
+
+
+def test_credential_lines_are_redacted_in_memory(tmp_path):
+    src, dest, mem = tmp_path / "src", tmp_path / "dest", tmp_path / "memory.jsonl"
+    make(src / "notes.md", b"deploy plan\napi_key = sk-live-123\nsteps follow", age_days=1)
+    ingest(src, dest, Rules(), NOW, apply=True, memory_path=mem)
+    text = warnetech_memory.load(mem).records[0].text
+    assert "sk-live-123" not in text
+    assert "api_key = [REDACTED]" in text
+    assert "steps follow" in text
+
+
+def test_private_key_block_in_unnamed_file_stays_out_of_memory(tmp_path):
+    src, dest, mem = tmp_path / "src", tmp_path / "dest", tmp_path / "memory.jsonl"
+    make(src / "scratch.md", b"-----BEGIN RSA PRIVATE KEY-----\nMIIBOgIBAAJ", age_days=1)
+    ingest(src, dest, Rules(), NOW, apply=True, memory_path=mem)
+    assert "MIIBOgIBAAJ" not in warnetech_memory.load(mem).records[0].text
