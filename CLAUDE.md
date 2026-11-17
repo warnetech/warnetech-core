@@ -33,6 +33,7 @@ src/warnetech_core/
   runtime/           Host resource probe, ollama CLI wrapper, `warnetech doctor`
   custom/            Custom models: spec -> Modelfile -> ollama create; dataset tools; evals
   routing/           Task classifier, model router, multi-model pipelines
+  alloc/             warnetech-alloc: P0-P3 priority rules, two-pass classifier, scan/ingest/audit
 core/                Standalone engine bootstrap (warnetech.sh entry point)
 mcp-servers/         MCP server definitions for tool integration
 scripts/             Utility and bootstrap scripts

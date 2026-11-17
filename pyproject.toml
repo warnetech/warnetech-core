@@ -35,6 +35,7 @@ dev = [
 [project.scripts]
 warnetech = "warnetech_core.cli:main"
 warnetech_memory = "warnetech_core.memory.warnetech_memory:main"
+warnetech-alloc = "warnetech_core.alloc.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/warnetech_core"]
