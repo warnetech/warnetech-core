@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .classify import Classification, classify, file_sha256, text_head
-from .rules import Rules, Tier
+from .rules import Priority, Rules, Tier, tier_for
 
 _TIER_DIRS = {Tier.HOT: "tier0_hot", Tier.WARM: "tier1_warm", Tier.COLD: "tier2_cold",
               Tier.QUARANTINE: "tier3_quarantine"}
@@ -63,6 +63,64 @@ def read_index(index_path: Path) -> IndexStats:
             except json.JSONDecodeError:
                 stats.corrupt_lines += 1
     return stats
+
+
+def current_records(dest: Path) -> list[dict]:
+    """The latest index record for each file (a later record, such as an override, wins)."""
+    latest: dict[str, dict] = {}
+    for record in read_index(dest / "index.jsonl").records:
+        digest = record.get("sha256")
+        if isinstance(digest, str):
+            latest.pop(digest, None)
+            latest[digest] = record
+    return list(latest.values())
+
+
+def safe_dest_path(dest: Path, relative: object) -> Path | None:
+    """``dest / relative`` if it stays inside ``dest``; None for anything else."""
+    if not isinstance(relative, str) or not relative:
+        return None
+    root = dest.resolve()
+    candidate = (root / relative).resolve()
+    return candidate if candidate.is_relative_to(root) else None
+
+
+class OverrideError(ValueError):
+    """A manual override could not be applied."""
+
+
+def reallocate(dest: Path, sha256: str, priority: Priority, now: float) -> dict:
+    """Set a stored file's priority by hand and move it to that priority's tier folder.
+
+    Only files already inside ``dest`` are moved. The change is appended to the index, so
+    the history stays visible and the latest record wins.
+    """
+    record = next((r for r in current_records(dest) if r.get("sha256") == sha256), None)
+    if record is None:
+        raise OverrideError("no such file in the index")
+    source = safe_dest_path(dest, record.get("dest"))
+    if source is None or not source.is_file():
+        raise OverrideError("stored file is missing or its path is not allowed")
+    root = dest.resolve()
+    tier = tier_for(priority)
+    target = root / _TIER_DIRS[tier] / source.name
+    if target != source:
+        if target.exists():
+            raise OverrideError("a file with that name already exists in the target tier")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(source), str(target))
+    updated = {
+        **record,
+        "dest": str(target.relative_to(root)),
+        "priority": priority.value,
+        "tier": int(tier),
+        "reasons": [*record.get("reasons", []), "manual override"],
+        "override": True,
+        "updated_at": now,
+    }
+    with (dest / "index.jsonl").open("a", encoding="utf-8") as index:
+        index.write(json.dumps(updated, sort_keys=True) + "\n")
+    return updated
 
 
 def ingest(root: Path, dest: Path, rules: Rules, now: float, *, apply: bool,
@@ -120,20 +178,26 @@ class AuditReport:
     corrupt_lines: int
     usage_bytes: dict[int, int]
     over_quota: dict[int, int]
+    unsafe: tuple[str, ...] = ()
 
     @property
     def ok(self) -> bool:
-        return not (self.missing or self.changed or self.over_quota)
+        return not (self.missing or self.changed or self.over_quota or self.unsafe)
 
 
 def audit(dest: Path, rules: Rules) -> AuditReport:
     """Check index entries against disk, and tier usage against quotas. Read-only."""
-    stats = read_index(dest / "index.jsonl")
+    corrupt = read_index(dest / "index.jsonl").corrupt_lines
+    records = current_records(dest)
     missing: list[str] = []
     changed: list[str] = []
+    unsafe: list[str] = []
     usage: dict[int, int] = {int(t): 0 for t in Tier}
-    for record in stats.records:
-        target = dest / str(record.get("dest", ""))
+    for record in records:
+        target = safe_dest_path(dest, record.get("dest"))
+        if target is None:
+            unsafe.append(str(record.get("dest")))
+            continue
         tier = int(record.get("tier", Tier.QUARANTINE))
         if not target.is_file():
             missing.append(str(target))
@@ -143,6 +207,5 @@ def audit(dest: Path, rules: Rules) -> AuditReport:
             changed.append(str(target))
     over = {t: used for t, used in usage.items()
             if t in rules.tier_quota_bytes and used > rules.tier_quota_bytes[t]}
-    return AuditReport(len(stats.records), tuple(missing), tuple(changed),
-                       stats.corrupt_lines, usage, over)
-
+    return AuditReport(len(records), tuple(missing), tuple(changed), corrupt, usage, over,
+                       tuple(unsafe))

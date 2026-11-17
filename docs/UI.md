@@ -13,3 +13,5 @@ Open <http://127.0.0.1:8080/ui>. Use `127.0.0.1`, not `0.0.0.0`, so only this ma
 - Uploads: text, Markdown, code, JSON, CSV, up to 1 MB each. Files that may hold secrets (`.env`, keys), hidden files and binaries are refused. Uploading a file with the same name replaces it.
 - Safety: API routes refuse any `Host` or `Origin` that is not localhost (add names with `WARNETECH_UI_ALLOWED_HOSTS`). The page makes no outside requests and shows model and document text as plain text.
 - Offline mode uses the echo provider, which repeats its prompt and has stub embeddings, so the "sources" it finds are not meaningful. Point `embed.default` and `chat.default` at real local models for real answers.
+
+The allocation dashboard is a second page at `/ui/alloc`; see `docs/ALLOC.md`.

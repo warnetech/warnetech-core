@@ -24,6 +24,19 @@ class Tier(int, Enum):
     QUARANTINE = 3
 
 
+_TIER_FOR = {
+    Priority.P0: Tier.HOT,
+    Priority.P1: Tier.WARM,
+    Priority.P2: Tier.WARM,  # eligible for tier 2 later; stays warm for now
+    Priority.P3: Tier.QUARANTINE,
+}
+
+
+def tier_for(priority: Priority) -> Tier:
+    """The tier a priority is allocated to."""
+    return _TIER_FOR[priority]
+
+
 @dataclass(frozen=True)
 class Rules:
     active_days: float = 14.0

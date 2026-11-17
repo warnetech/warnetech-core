@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Warnetech Allocation</title>
+<style>
+:root{--bg:#f6f7f9;--fg:#1b1f24;--muted:#5b6570;--card:#fff;--line:#d5dae0;--accent:#1f6feb;--bad:#b42318;--ok:#157f3b}
+@media (prefers-color-scheme:dark){:root{--bg:#14171b;--fg:#e8ebee;--muted:#9aa5b1;--card:#1d2127;--line:#323943;--accent:#5aa2ff;--bad:#ff8a80;--ok:#6fd48f}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif}
+main{max-width:64rem;margin:0 auto;padding:1rem}
+h1{font-size:1.3rem;margin:.5rem 0 1rem}
+h2{font-size:1rem;margin:0 0 .5rem}
+nav a{color:var(--accent);margin-right:1rem}
+section{background:var(--card);border:1px solid var(--line);border-radius:.6rem;padding:1rem;margin-bottom:1rem;overflow-x:auto}
+label{display:block;font-size:.9rem;color:var(--muted);margin-bottom:.25rem}
+input[type=text],input[type=password],select{padding:.45rem;border:1px solid var(--line);border-radius:.4rem;background:var(--bg);color:var(--fg);font:inherit}
+button{padding:.45rem .9rem;border:0;border-radius:.4rem;background:var(--accent);color:#fff;font:inherit;cursor:pointer}
+button:disabled{opacity:.5;cursor:default}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+th,td{text-align:left;padding:.35rem .5rem;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600}
+.bar{display:flex;gap:.75rem;flex-wrap:wrap;align-items:end;margin-bottom:.6rem}
+.status{margin-top:.5rem;font-size:.9rem;color:var(--muted);white-space:pre-wrap}
+.status.bad{color:var(--bad)}.status.ok{color:var(--ok)}
+.muted{color:var(--muted);font-size:.85rem}
+.snippet{white-space:pre-wrap;word-wrap:break-word;color:var(--muted);font-size:.85rem}
+.tag{display:inline-block;padding:0 .4rem;border:1px solid var(--line);border-radius:.3rem;font-size:.8rem}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+</style>
+</head>
+<body>
+<main>
+<h1>Warnetech allocation</h1>
+<nav><a href="/ui">Ask and upload</a></nav>
+
+<section id="tokenbox" hidden>
+  <label for="token">Access token (kept in this tab only, never saved)</label>
+  <input id="token" type="password" autocomplete="off">
+</section>
+
+<section aria-labelledby="h-monitor">
+  <h2 id="h-monitor">Storage and allocation monitor</h2>
+  <div id="totals" class="muted"></div>
+  <table>
+    <thead><tr><th>Tier</th><th>Files</th><th>Size</th><th>Quota</th></tr></thead>
+    <tbody id="tiers"></tbody>
+  </table>
+  <h2>Recent routing decisions</h2>
+  <table>
+    <thead><tr><th>File</th><th>Priority</th><th>Tier</th><th>Why</th></tr></thead>
+    <tbody id="recent"></tbody>
+  </table>
+  <div class="bar">
+    <button id="auditbtn" type="button">Run audit</button>
+    <button id="refreshbtn" type="button">Refresh</button>
+  </div>
+  <div id="auditout" class="status" role="status"></div>
+</section>
+
+<section aria-labelledby="h-queue">
+  <h2 id="h-queue">Priority queue and override console</h2>
+  <div class="bar">
+    <div><label for="pfilter">Show</label>
+    <select id="pfilter">
+      <option value="">All priorities</option>
+      <option>P0</option><option>P1</option><option>P2</option><option>P3</option>
+    </select></div>
+  </div>
+  <table>
+    <thead><tr><th>File</th><th>Priority</th><th>Tier</th><th>Size</th><th>Override</th></tr></thead>
+    <tbody id="queue"></tbody>
+  </table>
+  <div id="queuestatus" class="status" role="status"></div>
+</section>
+
+<section aria-labelledby="h-memory">
+  <h2 id="h-memory">Memory inspector</h2>
+  <div class="bar">
+    <div><label for="mq">Search indexed files</label>
+    <input id="mq" type="text" maxlength="200"></div>
+    <button id="mbtn" type="button">Search</button>
+  </div>
+  <div id="mstatus" class="status" role="status"></div>
+  <table>
+    <thead><tr><th>Source</th><th>Score</th><th>Priority / tier</th><th>Text</th></tr></thead>
+    <tbody id="memory"></tbody>
+  </table>
+</section>
+</main>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var token = "";
+  var TIERS = ["Hot", "Warm", "Cold", "Quarantine"];
+  function headers() {
+    var h = { "Content-Type": "application/json" };
+    if (token) h["Authorization"] = "Bearer " + token;
+    return h;
+  }
+  function say(el, text, kind) { el.textContent = text; el.className = "status" + (kind ? " " + kind : ""); }
+  async function call(method, path, body) {
+    var opts = { method: method, headers: headers() };
+    if (body) opts.body = JSON.stringify(body);
+    var res = await fetch(path, opts);
+    var data = null;
+    try { data = await res.json(); } catch (e) { data = null; }
+    if (!res.ok) {
+      var detail = data && data.detail ? data.detail : res.status + " " + res.statusText;
+      throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+    }
+    return data;
+  }
+  function cell(row, text) {
+    var td = document.createElement("td");
+    td.textContent = text == null ? "" : String(text);
+    row.appendChild(td);
+    return td;
+  }
+  function bytes(n) {
+    if (n == null) return "none";
+    if (n < 1024) return n + " B";
+    if (n < 1048576) return (n / 1024).toFixed(1) + " KB";
+    if (n < 1073741824) return (n / 1048576).toFixed(1) + " MB";
+    return (n / 1073741824).toFixed(2) + " GB";
+  }
+  function clear(el) { el.textContent = ""; }
+  function emptyRow(body, cols, text) {
+    var tr = document.createElement("tr");
+    var td = document.createElement("td");
+    td.colSpan = cols; td.className = "muted"; td.textContent = text;
+    tr.appendChild(td); body.appendChild(tr);
+  }
+  function tierName(t) { return TIERS[t] != null ? "Tier " + t + " " + TIERS[t] : "Tier " + t; }
+
+  async function loadSummary() {
+    var s = await call("GET", "/ui/api/alloc/summary");
+    var counts = Object.keys(s.priorities).map(function (k) { return k + ": " + s.priorities[k]; });
+    $("totals").textContent = s.total + " files indexed (" + counts.join(", ") + ")" +
+      (s.corrupt_lines ? "; " + s.corrupt_lines + " unreadable index line(s) skipped" : "");
+    var tb = $("tiers"); clear(tb);
+    s.tiers.forEach(function (t) {
+      var tr = document.createElement("tr");
+      cell(tr, tierName(t.tier)); cell(tr, t.files); cell(tr, bytes(t.bytes));
+      cell(tr, t.quota == null ? "none set" : bytes(t.quota));
+      tb.appendChild(tr);
+    });
+    var rb = $("recent"); clear(rb);
+    if (!s.recent.length) emptyRow(rb, 4, "Nothing ingested yet.");
+    s.recent.forEach(function (r) {
+      var tr = document.createElement("tr");
+      cell(tr, r.name); cell(tr, r.priority + (r.override ? " (manual)" : ""));
+      cell(tr, tierName(r.tier)); cell(tr, (r.reasons || []).join("; "));
+      rb.appendChild(tr);
+    });
+  }
+
+  async function applyOverride(row, select, button) {
+    button.disabled = true;
+    try {
+      await call("POST", "/ui/api/alloc/override", { sha256: row.sha256, priority: select.value });
+      say($("queuestatus"), row.name + " set to " + select.value + ".", "ok");
+      await Promise.all([loadQueue(), loadSummary()]);
+    } catch (e) {
+      say($("queuestatus"), e.message, "bad");
+      button.disabled = false;
+    }
+  }
+  async function loadQueue() {
+    var p = $("pfilter").value;
+    var r = await call("GET", "/ui/api/alloc/files" + (p ? "?priority=" + encodeURIComponent(p) : ""));
+    var tb = $("queue"); clear(tb);
+    if (!r.files.length) emptyRow(tb, 5, "No files.");
+    r.files.forEach(function (f) {
+      var tr = document.createElement("tr");
+      var name = cell(tr, f.name); name.title = f.source || "";
+      cell(tr, f.priority + (f.override ? " (manual)" : "")); cell(tr, tierName(f.tier)); cell(tr, bytes(f.size));
+      var td = document.createElement("td");
+      var sel = document.createElement("select");
+      sel.setAttribute("aria-label", "New priority for " + f.name);
+      ["P0", "P1", "P2", "P3"].forEach(function (v) {
+        var o = document.createElement("option"); o.textContent = v; o.value = v;
+        if (v === f.priority) o.selected = true;
+        sel.appendChild(o);
+      });
+      var btn = document.createElement("button");
+      btn.type = "button"; btn.textContent = "Apply";
+      btn.addEventListener("click", function () { applyOverride(f, sel, btn); });
+      td.appendChild(sel); td.appendChild(document.createTextNode(" ")); td.appendChild(btn);
+      tr.appendChild(td); tb.appendChild(tr);
+    });
+    if (r.total > r.files.length) say($("queuestatus"), "Showing " + r.files.length + " of " + r.total + ".");
+  }
+
+  async function runAudit() {
+    $("auditbtn").disabled = true;
+    say($("auditout"), "Checking...");
+    try {
+      var a = await call("GET", "/ui/api/alloc/audit");
+      var lines = ["Records checked: " + a.total];
+      a.missing.forEach(function (m) { lines.push("missing: " + m); });
+      a.changed.forEach(function (m) { lines.push("changed since ingest: " + m); });
+      a.unsafe.forEach(function (m) { lines.push("path not allowed: " + m); });
+      Object.keys(a.over_quota).forEach(function (t) { lines.push("over quota: tier " + t); });
+      lines.push(a.ok ? "OK" : "PROBLEMS FOUND");
+      say($("auditout"), lines.join("\n"), a.ok ? "ok" : "bad");
+    } catch (e) { say($("auditout"), e.message, "bad"); }
+    $("auditbtn").disabled = false;
+  }
+
+  async function searchMemory() {
+    $("mbtn").disabled = true;
+    try {
+      var r = await call("GET", "/ui/api/alloc/memory?q=" + encodeURIComponent($("mq").value.trim()));
+      say($("mstatus"), r.total + " records in memory" + (r.skipped_lines ? "; " + r.skipped_lines + " unreadable line(s) skipped" : ""));
+      var tb = $("memory"); clear(tb);
+      if (!r.hits.length) emptyRow(tb, 4, "No matches.");
+      r.hits.forEach(function (h) {
+        var tr = document.createElement("tr");
+        cell(tr, h.source); cell(tr, h.score == null ? "" : h.score);
+        cell(tr, h.meta && h.meta.priority ? h.meta.priority + " / tier " + h.meta.tier : "");
+        var t = cell(tr, h.text); t.className = "snippet";
+        tb.appendChild(tr);
+      });
+    } catch (e) { say($("mstatus"), e.message, "bad"); }
+    $("mbtn").disabled = false;
+  }
+
+  async function refresh() {
+    try { await Promise.all([loadSummary(), loadQueue(), searchMemory()]); }
+    catch (e) { say($("queuestatus"), e.message, "bad"); }
+  }
+  $("auditbtn").addEventListener("click", runAudit);
+  $("refreshbtn").addEventListener("click", refresh);
+  $("pfilter").addEventListener("change", function () { loadQueue().catch(function (e) { say($("queuestatus"), e.message, "bad"); }); });
+  $("mbtn").addEventListener("click", searchMemory);
+  $("mq").addEventListener("keydown", function (e) { if (e.key === "Enter") searchMemory(); });
+  $("token").addEventListener("input", function (e) { token = e.target.value.trim(); });
+  fetch("/ui/api/info").then(function (r) { return r.json(); }).then(function (i) {
+    if (i.auth_required) $("tokenbox").hidden = false; else refresh();
+  }).catch(function () { refresh(); });
+  $("token").addEventListener("change", refresh);
+})();
+</script>
+</body>
+</html>

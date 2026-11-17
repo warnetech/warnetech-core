@@ -31,7 +31,25 @@ Exit codes: `0` ok, `1` audit found problems, `2` bad usage or rules file.
 | P1 | Modified within `active_days` (14), or between 14 and 30 days | 1 warm |
 | P2 | Inactive beyond `reference_days` (30), known type | 1 warm, eligible for tier 2 |
 
-**Open question:** the plan leaves the 14 to 30 day band undefined. It is currently P1. Change it in the rules file once decided.
+**Decided:** files between `active_days` and `reference_days` (14 to 30 days old) are P1. The plan left this band undefined.
+
+## Dashboard
+
+```bash
+pip install -e ".[service]"
+WARNETECH_OFFLINE=1 WARNETECH_ALLOW_ANONYMOUS=1 \
+  uvicorn warnetech_core.service.app:app --host 127.0.0.1 --port 8080
+```
+
+Open <http://127.0.0.1:8080/ui/alloc>. It reads `WARNETECH_ALLOC_DIR` (default `data/alloc`) and the memory store.
+
+- **Storage and allocation monitor:** files and size per tier, quota, recent routing decisions, and an on-demand audit.
+- **Priority queue and override console:** files sorted P0 to P3. Choose a new priority and **Apply** to move the stored copy to that tier's folder. The change is appended to the index, so history is kept and the latest record wins. Only copies inside the allocation directory are ever moved; your originals are not touched.
+- **Memory inspector:** search the indexed files.
+
+Same protections as the main UI: localhost-only, the service token when set, a strict CSP, no outside requests.
+
+**Known limitation:** a manual override updates the allocation index but not the matching memory record, so the memory inspector may show the old priority until the file is re-indexed.
 
 ## Rules file
 
@@ -39,7 +57,7 @@ Copy `config/priority_rules.yaml`, edit, and pass it with `--rules` or `WARNETEC
 
 ## Not in Phase 1
 
-- Web dashboard (FastAPI and HTMX)
 - MCP bridge checks
+- MCP bridge status view (Step 5)
 - Cloud tunnels, Milvus and Workers (these conflict with the air-gapped rule in `docs/PRD.md`)
 - Priority decay and automatic migration to tier 2 (`audit` only reports; it doesn't re-prioritise)

@@ -318,3 +318,44 @@ def test_private_key_block_in_unnamed_file_stays_out_of_memory(tmp_path):
     make(src / "scratch.md", b"-----BEGIN RSA PRIVATE KEY-----\nMIIBOgIBAAJ", age_days=1)
     ingest(src, dest, Rules(), NOW, apply=True, memory_path=mem)
     assert "MIIBOgIBAAJ" not in warnetech_memory.load(mem).records[0].text
+
+
+# --- tier mapping and path safety ----------------------------------------------------------
+
+from warnetech_core.alloc.rules import tier_for  # noqa: E402
+from warnetech_core.alloc.store import current_records, reallocate  # noqa: E402
+
+
+def test_tier_for_matches_what_the_classifier_assigns(tmp_path):
+    cases = {
+        "warnetech-core.md": 1,       # P0
+        "notes.md": 1,                # P1
+        "old.md": 31,                 # P2
+        "setup.part": 1,              # P3
+    }
+    for name, age in cases.items():
+        item = classify_file(make(tmp_path / name, b"x", age_days=age))
+        assert item.tier is tier_for(item.priority), name
+
+
+def test_audit_flags_an_index_path_that_escapes_the_allocation_dir(tmp_path):
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    outside = tmp_path / "outside.txt"
+    outside.write_text("x")
+    record = {"dest": "../outside.txt", "sha256": "b" * 64, "tier": 1}
+    (dest / "index.jsonl").write_text(json.dumps(record) + "\n", encoding="utf-8")
+    report = audit(dest, Rules())
+    assert report.unsafe == ("../outside.txt",)
+    assert not report.ok
+
+
+def test_latest_record_wins_in_current_records(tmp_path):
+    src, dest = tmp_path / "src", tmp_path / "dest"
+    make(src / "a.md", b"hello", age_days=1)
+    ingest(src, dest, Rules(), NOW, apply=True)
+    digest = current_records(dest)[0]["sha256"]
+    reallocate(dest, digest, Priority.P3, NOW)
+    latest = current_records(dest)
+    assert len(latest) == 1
+    assert (latest[0]["priority"], latest[0]["tier"]) == ("P3", 3)
