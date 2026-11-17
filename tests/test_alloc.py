@@ -359,3 +359,42 @@ def test_latest_record_wins_in_current_records(tmp_path):
     latest = current_records(dest)
     assert len(latest) == 1
     assert (latest[0]["priority"], latest[0]["tier"]) == ("P3", 3)
+
+
+# --- redaction forms --------------------------------------------------------------------------
+
+from warnetech_core.alloc.memory_link import redact  # noqa: E402
+
+
+@pytest.mark.parametrize(
+    ("text", "secret"),
+    [
+        ("api_key = sk-live-1", "sk-live-1"),
+        ("password: hunter2", "hunter2"),
+        ('"api_key": "sk-live-2"', "sk-live-2"),
+        ('{"password": "hunter3", "user": "a"}', "hunter3"),
+        ("export API_KEY=sk-live-4", "sk-live-4"),
+        ('  "token": "abc123",', "abc123"),
+        ("AWS_SECRET_ACCESS_KEY=abc123", "abc123"),
+        ("Authorization: Bearer abc.def.ghi.jkl", "abc.def.ghi.jkl"),
+        ("db_url = postgres://user:pw0rd@host/db", "pw0rd"),
+        ("key AKIAIOSFODNN7EXAMPLE here", "AKIAIOSFODNN7EXAMPLE"),
+        ("pasted ghp_abcdefghijklmnopqrstuvwx", "ghp_abcdefghijklmnopqrstuvwx"),
+        ("note sk-abcdefghijklmnopqrstu end", "sk-abcdefghijklmnopqrstu"),
+    ],
+)
+def test_redact_covers_common_credential_forms(text, secret):
+    assert secret not in redact(text)
+
+
+def test_redact_leaves_ordinary_text_and_other_json_fields_alone():
+    assert redact("plain notes about quokkas") == "plain notes about quokkas"
+    assert '"user": "a"' in redact('{"password": "hunter3", "user": "a"}')
+
+
+def test_redact_is_fast_on_a_long_line_with_no_separator():
+    import time as _time
+
+    started = _time.perf_counter()
+    redact("a" * 200_000)
+    assert _time.perf_counter() - started < 1.0

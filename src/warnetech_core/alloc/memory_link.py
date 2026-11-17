@@ -17,15 +17,28 @@ from .rules import Priority, Tier
 
 _TEXT_PRIORITIES = frozenset({Priority.P0, Priority.P1})
 _PRIVATE_KEY = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")
-_CREDENTIAL_LINE = re.compile(
-    r"(?im)^(\s*[\w.-]*(?:password|passwd|secret|token|api[_-]?key|credential)[\w.-]*\s*[:=]\s*)\S.*$"
+_KEY = r"[\w.-]{0,40}(?:password|passwd|secret|token|api[_-]?key|credential)[\w.-]{0,40}"
+# key = value, "key": "value", export KEY=value: anywhere in a line, quoted or not.
+_CREDENTIAL_PAIR = re.compile(
+    rf"(?i)([\"']?{_KEY}[\"']?\s*[:=]\s*)(\"(?:[^\"\\\n]|\\.)*\"|'[^'\n]*'|[^\n]*)"
+)
+_BEARER = re.compile(r"(?i)\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}")
+_URL_CREDENTIALS = re.compile(r"(?i)\b([a-z][a-z0-9+.-]*://)[^\s/@:]+:[^\s/@]+@")
+_TOKEN_SHAPES = re.compile(
+    r"\b(?:AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{16,})"
 )
 _REDACTED = "[REDACTED]"
 
 
 def redact(text: str) -> str:
-    """Blank out credential-looking values before text is stored anywhere."""
-    return _CREDENTIAL_LINE.sub(lambda m: m.group(1) + _REDACTED, text)
+    """Blank out credential-looking values before text is stored anywhere.
+
+    Heuristic: it covers common shapes, not every secret. Over-redaction is the safe side.
+    """
+    text = _CREDENTIAL_PAIR.sub(lambda m: m.group(1) + _REDACTED, text)
+    text = _BEARER.sub(lambda m: f"{m.group(1)} {_REDACTED}", text)
+    text = _URL_CREDENTIALS.sub(lambda m: f"{m.group(1)}{_REDACTED}@", text)
+    return _TOKEN_SHAPES.sub(_REDACTED, text)
 
 
 def safe_head(path: Path, head: str | None) -> str | None:
