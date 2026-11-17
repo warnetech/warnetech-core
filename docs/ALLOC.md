@@ -8,6 +8,7 @@ Classifies files into priority levels and tiers, then optionally copies them int
 warnetech-alloc scan <path>                 # dry run: predicted priority and tier
 warnetech-alloc ingest <path>               # plan only, copies nothing
 warnetech-alloc ingest <path> --apply       # copy into the tier folders and index them
+warnetech-alloc ingest <path> --apply --memory  # also index into the warnetech memory store
 warnetech-alloc audit                       # check index against disk and tier quotas
 ```
 
@@ -17,6 +18,7 @@ Exit codes: `0` ok, `1` audit found problems, `2` bad usage or rules file.
 
 - **Ingest copies; it never moves or deletes the source.**
 - Content already in the index (same SHA-256) is skipped, so re-running ingest adds nothing.
+- With `--memory`, each ingested file is stored in the warnetech memory store (`get_context` can then find it). P0 and P1 text files contribute their opening text. P2 and P3 files, and all binaries, are stored as a header line only.
 - Hidden files and folders are skipped.
 - The content pass reads only the first `sniff_bytes` (default 4096) of each file. It is keyword and byte based. There is no embedding or LLM pass yet.
 
@@ -41,4 +43,3 @@ Copy `config/priority_rules.yaml`, edit, and pass it with `--rules` or `WARNETEC
 - MCP bridge checks
 - Cloud tunnels, Milvus and Workers (these conflict with the air-gapped rule in `docs/PRD.md`)
 - Priority decay and automatic migration to tier 2 (`audit` only reports; it doesn't re-prioritise)
-- Writing ingested items into the RAG memory index

@@ -38,6 +38,12 @@ def _sniff(path: Path, rules: Rules) -> tuple[bool, str]:
     return is_binary, head.decode("utf-8", errors="replace")
 
 
+def text_head(path: Path, rules: Rules) -> str | None:
+    """The opening text of a text file, or None for binary content."""
+    is_binary, head = _sniff(path, rules)
+    return None if is_binary else head
+
+
 def classify(
     path: Path,
     rules: Rules,

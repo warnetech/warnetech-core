@@ -242,3 +242,53 @@ def test_cli_audit_exit_code_reflects_problems(tmp_path):
     assert main(["audit", "--dest", str(dest)]) == 0
     next(dest.rglob("*.md")).unlink()
     assert main(["audit", "--dest", str(dest)]) == 1
+
+
+# --- memory link -----------------------------------------------------------------------
+
+from warnetech_core.memory import warnetech_memory  # noqa: E402
+
+
+def test_p1_text_is_searchable_in_memory(tmp_path):
+    src, dest, mem = tmp_path / "src", tmp_path / "dest", tmp_path / "memory.jsonl"
+    make(src / "plan.md", b"quokka migration plan for the archive", age_days=1)
+    ingest(src, dest, Rules(), NOW, apply=True, memory_path=mem)
+    records = warnetech_memory.load(mem).records
+    assert len(records) == 1
+    hits = warnetech_memory.search(records, "quokka")
+    assert hits and "quokka migration plan" in hits[0].record.text
+    assert records[0].meta["priority"] == "P1"
+
+
+def test_p2_is_indexed_by_metadata_only(tmp_path):
+    src, dest, mem = tmp_path / "src", tmp_path / "dest", tmp_path / "memory.jsonl"
+    make(src / "old.md", b"wombat secret body text", age_days=31)
+    ingest(src, dest, Rules(), NOW, apply=True, memory_path=mem)
+    record = warnetech_memory.load(mem).records[0]
+    assert record.meta["priority"] == "P2"
+    assert "wombat" not in record.text
+    assert "old.md" in record.text
+
+
+def test_binary_is_indexed_by_header_only(tmp_path):
+    src, dest, mem = tmp_path / "src", tmp_path / "dest", tmp_path / "memory.jsonl"
+    make(src / "blob.xyz", b"\x00\x01binarybody", age_days=0)
+    ingest(src, dest, Rules(), NOW, apply=True, memory_path=mem)
+    record = warnetech_memory.load(mem).records[0]
+    assert record.meta["priority"] == "P3"
+    assert "binarybody" not in record.text
+
+
+def test_dry_run_never_touches_memory(tmp_path):
+    src, dest, mem = tmp_path / "src", tmp_path / "dest", tmp_path / "memory.jsonl"
+    make(src / "a.md", b"hello", age_days=1)
+    ingest(src, dest, Rules(), NOW, apply=False, memory_path=mem)
+    assert not mem.exists()
+
+
+def test_reingest_does_not_duplicate_memory_records(tmp_path):
+    src, dest, mem = tmp_path / "src", tmp_path / "dest", tmp_path / "memory.jsonl"
+    make(src / "a.md", b"hello again", age_days=1)
+    ingest(src, dest, Rules(), NOW, apply=True, memory_path=mem)
+    ingest(src, dest, Rules(), NOW, apply=True, memory_path=mem)
+    assert len(warnetech_memory.load(mem).records) == 1

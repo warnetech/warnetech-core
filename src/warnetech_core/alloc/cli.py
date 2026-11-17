@@ -52,8 +52,13 @@ def cmd_scan(args: argparse.Namespace) -> int:
 def cmd_ingest(args: argparse.Namespace) -> int:
     rules = _rules(args)
     dest = _dest(args)
+    memory_path = None
+    if args.memory:
+        from warnetech_core.memory import warnetech_memory
+
+        memory_path = warnetech_memory.default_store_path()
     items = ingest(Path(args.path), dest, rules, time.time(), apply=args.apply,
-                   max_files=args.max_files)
+                   max_files=args.max_files, memory_path=memory_path if args.apply else None)
     if not args.apply:
         print("DRY RUN: nothing copied. Re-run with --apply to copy and index.\n")
     if items:
@@ -99,6 +104,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("path")
     p.add_argument("--apply", action="store_true")
     p.add_argument("--dest", help="allocation directory (or WARNETECH_ALLOC_DIR)")
+    p.add_argument("--memory", action="store_true",
+                   help="with --apply, also index into the warnetech memory store")
     common(p)
     p.set_defaults(func=cmd_ingest)
 

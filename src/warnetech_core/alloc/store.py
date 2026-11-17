@@ -8,7 +8,7 @@ import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .classify import Classification, classify, file_sha256
+from .classify import Classification, classify, file_sha256, text_head
 from .rules import Rules, Tier
 
 _TIER_DIRS = {Tier.HOT: "tier0_hot", Tier.WARM: "tier1_warm", Tier.COLD: "tier2_cold",
@@ -66,7 +66,7 @@ def read_index(index_path: Path) -> IndexStats:
 
 
 def ingest(root: Path, dest: Path, rules: Rules, now: float, *, apply: bool,
-           max_files: int = 10_000) -> list[Classification]:
+           max_files: int = 10_000, memory_path: Path | None = None) -> list[Classification]:
     """Plan (apply=False) or copy-and-index (apply=True) files from ``root`` into ``dest``."""
     index_path = dest / "index.jsonl"
     known = frozenset(
@@ -94,6 +94,10 @@ def ingest(root: Path, dest: Path, rules: Rules, now: float, *, apply: bool,
             target = target_dir / f"{item.sha256[:12]}-{source.name}"
             if not target.exists():
                 shutil.copy2(source, target)
+            if memory_path is not None:
+                from .memory_link import index_item
+
+                index_item(memory_path, item, text_head(source, rules))
             record = {
                 "source": item.path,
                 "dest": str(target.relative_to(dest)),
