@@ -44,7 +44,7 @@ vendor/              Bundled repos (claude-code-assist, CLI-AI-Command-Center-PR
 
 ```bash
 pip install -e ".[dev]"           # install with dev tools
-pytest                            # 216+ tests, fully offline
+pytest                            # 950+ tests, fully offline
 ruff check src tests              # lint
 WARNETECH_OFFLINE=1 python examples/quickstart.py   # run without API keys
 ./warnetech.sh ask "hello"        # shell wrapper
