@@ -13,7 +13,7 @@ or a proxy password, and never contacts hosted providers. `--json` for scripts.
 | macOS, Python 3.12 | Supported | CI, blocking |
 | Windows, Python 3.12 | Supported, with limits | CI, blocking. Interpreter limits (memory, CPU, file size) and `bash` are POSIX-only; `bash` is refused on Windows |
 | Linux arm64, Raspberry Pi | Supported | CI on `ubuntu-24.04-arm`; multi-arch image built (amd64+arm64) by `image.yml`. Not run on a Pi |
-| Android 64-bit (arm64-v8a), Termux | Verified on one device | `scripts/termux_install.sh` ran to completion natively (Python 3.14, aarch64; pydantic-core compiled from source) and `warnetech doctor` detected Termux. Debian under proot-distro also ran the full suite (742 passed). The test suite was not run in native Termux. 32-bit Android is unsupported. Ollama is not packaged for Termux: point `OLLAMA_HOST` at another machine |
+| Android 64-bit (arm64-v8a), Termux | Verified on one device | `scripts/termux_install.sh` ran to completion natively (Python 3.14, aarch64; pydantic-core compiled from source) and `warnetech doctor` detected Termux. Debian under proot-distro also ran the full suite (742 passed); see [Android: Debian under proot-distro](#android-debian-under-proot-distro) and `scripts/proot_debian_install.sh`. The test suite was not run in native Termux. 32-bit Android is unsupported. Ollama is not packaged for Termux: point `OLLAMA_HOST` at another machine |
 | Kubernetes | Manifests, not applied | `deploy/kubernetes/` (kustomize); checked structurally by tests only, never against a cluster |
 | Python older than 3.10 | Not supported | |
 | Local weights (`hf` extra) | Python 3.11+ only | `transformers` 5 and `torch` require it |
@@ -32,6 +32,38 @@ or a proxy password, and never contacts hosted providers. `--json` for scripts.
 The service image runs as an unprivileged user, keeps its data in `/data`, has a
 health check on `/health`, and takes the API token and provider keys from the
 environment at run time. It does not bake in credentials, weights or tokens.
+
+## Android: Debian under proot-distro
+
+Prefer this over native Termux: Debian is glibc, so pip installs prebuilt `aarch64` wheels
+and nothing compiles. Needs a 64-bit device and the F-Droid or GitHub build of Termux.
+
+```bash
+git clone <repo-url> warnetech-core && cd warnetech-core
+bash scripts/proot_debian_install.sh            # add --service for the FastAPI extra
+```
+
+In Termux the script installs `proot-distro` and Debian, binds the repo to
+`/root/warnetech-core`, and re-runs itself inside Debian. There it installs
+`python3`, `python3-venv` and `git`, creates `~/.venvs/warnetech` (override with
+`WARNETECH_VENV`), runs `pip install -e .`, then an offline smoke test and `warnetech doctor`.
+It also runs directly in any Debian or Ubuntu guest.
+
+Use it later:
+
+```bash
+proot-distro login debian --bind "$PWD:/root/warnetech-core"
+. ~/.venvs/warnetech/bin/activate
+warnetech ask "hello"
+```
+
+Limits: no Ollama in the guest, so set `OLLAMA_HOST` to another machine or use
+`WARNETECH_OFFLINE=1`. proot may not enforce the interpreter's memory and CPU limits;
+`warnetech doctor` reports this. Put provider keys in `.env`. Use `warnetech`, not
+`./warnetech.sh`, for `doctor`.
+
+Status: the guest steps ran on Linux x86_64 and the Termux hand-off is unrun on a device.
+For native Termux use `scripts/termux_install.sh`.
 
 ## Network conditions
 
