@@ -39,7 +39,7 @@ Prefer this over native Termux: Debian is glibc, so pip installs prebuilt `aarch
 and nothing compiles. Needs a 64-bit device and the F-Droid or GitHub build of Termux.
 
 ```bash
-git clone <repo-url> warnetech-core && cd warnetech-core
+git clone https://github.com/warnetech/warnetech-core && cd warnetech-core
 bash scripts/proot_debian_install.sh            # add --service for the FastAPI extra
 ```
 
