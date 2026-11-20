@@ -4,10 +4,44 @@ import asyncio
 import logging
 import os
 import signal
+import sys
 from collections.abc import Awaitable
 from pathlib import Path
 
 from .logger import get_daemon_logger
+
+
+def _process_exists(pid: int) -> bool:
+    """
+    Check if a process with the given PID exists (cross-platform safe).
+
+    On Windows, avoid os.kill(pid, 0) which sends CTRL_C_EVENT.
+    On POSIX, PermissionError means the process exists but we can't probe it.
+    """
+    if sys.platform == "win32":
+        # On Windows, try to open the process handle
+        try:
+            import ctypes
+
+            handle = ctypes.windll.kernel32.OpenProcess(
+                0, False, pid
+            )  # PROCESS_QUERY_LIMITED_INFORMATION = 0
+            if handle:
+                ctypes.windll.kernel32.CloseHandle(handle)
+                return True
+            return False
+        except Exception:
+            return False
+    else:
+        # On POSIX, signal 0 is a safe no-op probe
+        try:
+            os.kill(pid, 0)
+            return True
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            # Process exists but we don't have permission to check it
+            return True
 
 
 class DaemonManager:
@@ -64,9 +98,12 @@ class DaemonManager:
         if self.pid_file.exists():
             try:
                 pid = int(self.pid_file.read_text().strip())
-                os.kill(pid, 0)  # Check if process exists
-                raise RuntimeError(f"{self.name} already running with PID {pid}")
-            except (ProcessLookupError, ValueError):
+                if _process_exists(pid):
+                    raise RuntimeError(f"{self.name} already running with PID {pid}")
+            except ValueError:
+                # PID file contains invalid data, remove it
+                self.pid_file.unlink(missing_ok=True)
+            else:
                 # PID file stale, remove it
                 self.pid_file.unlink(missing_ok=True)
 
@@ -79,10 +116,14 @@ class DaemonManager:
         self.pid_file.write_text(f"{pid}\n")
         self.logger.info("%s started (PID %d)", self.name, pid)
 
-        # Set up signal handlers
+        # Set up signal handlers (Unix/Linux only; Windows doesn't support this)
         loop = asyncio.get_event_loop()
-        for sig in (signal.SIGTERM, signal.SIGINT):
-            loop.add_signal_handler(sig, self._signal_handler, sig)
+        try:
+            for sig in (signal.SIGTERM, signal.SIGINT):
+                loop.add_signal_handler(sig, self._signal_handler, sig)
+        except NotImplementedError:
+            # Windows doesn't support add_signal_handler; skip gracefully
+            self.logger.debug("Signal handlers not supported on this platform")
 
         self._running = True
 

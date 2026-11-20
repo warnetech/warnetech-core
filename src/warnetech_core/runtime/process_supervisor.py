@@ -86,8 +86,8 @@ class ProcessSupervisor:
                 *self.config.command,
                 cwd=self.config.work_dir,
                 env=self.config.env,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
             )
             self.state.pid = self._process.pid
             self.logger.info("%s started (PID %d)", self.config.name, self._process.pid)
