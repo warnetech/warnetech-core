@@ -7,10 +7,19 @@ local models are installed, and whether a model is likely to fit.
 
 from __future__ import annotations
 
+from .daemon import DaemonManager
+from .logger import get_daemon_logger, setup_daemon_logger
 from .ollama_cli import OllamaCLI, OllamaModel, parse_ollama_list
+from .process_supervisor import ProcessConfig, ProcessStatus, ProcessSupervisor
 from .resources import Resources, probe_resources, recommend_model
 
 __all__ = [
+    "DaemonManager",
+    "ProcessSupervisor",
+    "ProcessConfig",
+    "ProcessStatus",
+    "setup_daemon_logger",
+    "get_daemon_logger",
     "OllamaCLI",
     "OllamaModel",
     "Resources",

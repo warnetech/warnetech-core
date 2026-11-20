@@ -1,6 +1,6 @@
 ---
 title: "Finish warnetech-core: PRoot daemon & CLI (phases 2–5)"
-status: planning
+status: in-progress
 size: Large
 created: 2026-11-20
 ---

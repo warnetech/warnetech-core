@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "plan_id": "2026-11-20-proot-daemon",
+  "created_at": "2026-11-20T12:00:00Z",
+  "last_updated_at": "2026-11-20T12:35:00Z",
+  "phases": [
+    {
+      "phase": 2,
+      "name": "Daemon Supervisor",
+      "status": "complete",
+      "passes": true,
+      "verify_command": "pytest tests/test_daemon_cli.py::TestLogger -q",
+      "items": [
+        {
+          "id": "phase2-logger",
+          "description": "logger.py — rotating file logger",
+          "file": "src/warnetech_core/runtime/logger.py",
+          "passes": true
+        },
+        {
+          "id": "phase2-daemon",
+          "description": "daemon.py — async daemon lifecycle",
+          "file": "src/warnetech_core/runtime/daemon.py",
+          "passes": true
+        },
+        {
+          "id": "phase2-supervisor",
+          "description": "process_supervisor.py — subprocess management",
+          "file": "src/warnetech_core/runtime/process_supervisor.py",
+          "passes": true
+        },
+        {
+          "id": "phase2-init",
+          "description": "__init__.py — module exports",
+          "file": "src/warnetech_core/runtime/__init__.py",
+          "passes": true
+        },
+        {
+          "id": "phase2-tests",
+          "description": "test_daemon_cli.py — test suite",
+          "file": "tests/test_daemon_cli.py",
+          "passes": true
+        }
+      ]
+    },
+    {
+      "phase": 3,
+      "name": "CLI Wiring",
+      "status": "pending",
+      "passes": false,
+      "verify_command": "warnetech init --non-interactive && warnetech daemon start && warnetech daemon status | grep running",
+      "items": []
+    },
+    {
+      "phase": 4,
+      "name": "Bootstrap Scripts",
+      "status": "pending",
+      "passes": false,
+      "verify_command": "bash scripts/proot_debian_setup.sh && warnetech doctor",
+      "items": []
+    },
+    {
+      "phase": 5,
+      "name": "Integration Tests",
+      "status": "pending",
+      "passes": false,
+      "verify_command": "pytest tests/test_daemon_proot_integration.py -q",
+      "items": []
+    }
+  ]
+}
