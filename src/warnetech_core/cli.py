@@ -190,9 +190,7 @@ def cmd_chat(args: argparse.Namespace) -> int:
             )
             from .delegation import DelegationRunner, load_agents
 
-            runner = DelegationRunner(
-                gateway, load_agents(), memory, project=args.project
-            )
+            runner = DelegationRunner(gateway, load_agents(), memory, project=args.project)
             return await run_chat(session, runner=runner)
         finally:
             await memory.aclose()
@@ -207,6 +205,12 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     checks = run_checks(network=args.network)
     print(json.dumps(to_dicts(checks), indent=2) if args.json else format_text(checks))
     return exit_code(checks)
+
+
+def cmd_init(args: argparse.Namespace) -> int:
+    from .commands.init import handle_init
+
+    return handle_init(non_interactive=args.non_interactive)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -257,7 +261,19 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--network", action="store_true", help="also ask the configured Ollama hosts")
     p.set_defaults(func=cmd_doctor)
 
+    p = sub.add_parser("init", help="initialize warnetech environment")
+    p.add_argument("--non-interactive", action="store_true", help="skip prompts and use defaults")
+    p.set_defaults(func=cmd_init)
+
     # Command groups built on cli_core (each command capped at 4 parameters).
+    from .daemon_commands import group as daemon_group
+
+    daemon_group.mount(sub)
+
+    from .automation_commands import group as automation_group
+
+    automation_group.mount(sub)
+
     from .ollama_commands import group as ollama_group
 
     ollama_group.mount(sub)
@@ -283,6 +299,10 @@ def main(argv: list[str] | None = None) -> int:
     memory_group.mount(sub)
 
     args = parser.parse_args(argv)
+    if getattr(args, "command", None) == "daemon":
+        return daemon_group.dispatch(args)
+    if getattr(args, "command", None) == "automation":
+        return automation_group.dispatch(args)
     if getattr(args, "command", None) == "ollama":
         return ollama_group.dispatch(args)
     if getattr(args, "command", None) == "interpreter":

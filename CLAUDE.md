@@ -27,12 +27,13 @@ src/warnetech_core/
   memory/            types, base, inmemory, sqlite, pgvector, supabase, service, ingest, warnetech_memory (JSONL + BM25)
   delegation/        Sub-agents (/delegate): YAML specs, runner with parallel/budget/no-nesting limits
   chat.py            Interactive chat: core memory + retrieved context + session history
-  service/           FastAPI app + schemas, signed webhooks, local web UI (warnetech_ui)
+  service/           FastAPI app + schemas, signed webhooks, local web UI (warnetech_ui, alloc_ui)
   agi/               AGI capabilities — reasoning, planning, tools, reflection
   interpreter/       Natural-language code execution: workspace, executor, approval, audit
   runtime/           Host resource probe, ollama CLI wrapper, `warnetech doctor`
   custom/            Custom models: spec -> Modelfile -> ollama create; dataset tools; evals
   routing/           Task classifier, model router, multi-model pipelines
+  alloc/             warnetech-alloc: P0-P3 priority rules, two-pass classifier, scan/ingest/audit
 core/                Standalone engine bootstrap (warnetech.sh entry point)
 mcp-servers/         MCP server definitions for tool integration
 scripts/             Utility and bootstrap scripts
@@ -43,7 +44,7 @@ vendor/              Bundled repos (claude-code-assist, CLI-AI-Command-Center-PR
 
 ```bash
 pip install -e ".[dev]"           # install with dev tools
-pytest                            # 216+ tests, fully offline
+pytest                            # 950+ tests, fully offline
 ruff check src tests              # lint
 WARNETECH_OFFLINE=1 python examples/quickstart.py   # run without API keys
 ./warnetech.sh ask "hello"        # shell wrapper

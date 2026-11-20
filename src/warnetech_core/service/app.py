@@ -116,6 +116,10 @@ app.include_router(
     _build_ui_router(get_gateway, get_memory, require_token, lambda: _state.get("token"))
 )
 
+from .alloc_ui import build_alloc_router as _build_alloc_router  # noqa: E402
+
+app.include_router(_build_alloc_router(require_token))
+
 
 # ---- error translation --------------------------------------------------
 

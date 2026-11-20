@@ -22,7 +22,7 @@ pgvector = ["psycopg[binary,pool]>=3.1"]
 # so these only install there. accelerate is required for device_map="auto".
 hf = [
     "transformers>=5,<6; python_version >= '3.11'",
-    "torch>=2; python_version >= '3.11'",
+    "torch>=2.6; python_version >= '3.11'",
     "accelerate>=1; python_version >= '3.11'",
 ]
 dev = [
@@ -35,6 +35,7 @@ dev = [
 [project.scripts]
 warnetech = "warnetech_core.cli:main"
 warnetech_memory = "warnetech_core.memory.warnetech_memory:main"
+warnetech-alloc = "warnetech_core.alloc.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/warnetech_core"]

@@ -15,6 +15,22 @@ The problem is not missing features. It is that **the package cannot currently b
 none of that reaches a user. The first phase is therefore a repair-and-ship phase, not a build phase.
 Later phases harden what exists and adopt outside projects only at the edges, as optional extras.
 
+## Status (2026-11-18)
+
+Phase 1 of this document is done except the release tag. The install problems in section 2 are fixed on branch `claude/blissful-fermi-b3mz47`: 955 tests pass on Python 3.12 and 3.13.
+
+| ID | Result |
+|---|---|
+| P1-1 entry points | Done: `warnetech_core.cli:main`, `warnetech_core.memory.warnetech_memory:main`, plus `warnetech-alloc` |
+| P1-2 pydantic cap | Done: `pydantic>=2.6,<3` |
+| P1-3 support matrix | Done: Python 3.10 and newer; CI tests 3.10 to 3.13 |
+| P1-4 service tests | Done: `fastapi` added to the `dev` extra |
+| P1-5 install smoke test | Added as the `wheel-smoke` CI job (Linux and Windows). It has not run on GitHub yet; the same commands were run locally |
+| P1-6 doc corrections | Partly done: Python version and test count corrected. **Open:** `CLAUDE.md` still says "zero required runtime dependencies", but `httpx`, `pydantic` and `pyyaml` are required. Owner to decide whether to change the sentence or the dependencies |
+| P1-7 release tag `0.1.1` | Not done. Needs the owner's go-ahead |
+
+The file-allocation plan (`warnetech-alloc`) is tracked separately in `docs/ALLOC.md`: rules, classifier, CLI, memory link, recovery and the dashboard are built. The MCP bridge checks are not, pending the owner's choice of servers and network access.
+
 ## 2. Verified baseline (this session)
 
 | Check | Result |

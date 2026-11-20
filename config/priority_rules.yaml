@@ -1,0 +1,22 @@
+# Example warnetech-alloc rules. Every key is optional; omitted keys use the built-in defaults.
+# Use with: warnetech-alloc scan <path> --rules config/priority_rules.yaml
+
+active_days: 14          # modified within this many days -> P1
+reference_days: 30       # inactive beyond this -> P2 (between the two: P1 by default)
+
+critical_name_patterns:  # filename contains one of these -> P0
+  - warnetech-
+  - warnetech_
+  - critical
+
+critical_content_markers:  # first bytes contain one of these -> P0
+  - "[CRITICAL]"
+
+transient_suffixes:      # these endings -> P3 (quarantine)
+  - .tmp
+  - .part
+  - .crdownload
+
+sniff_bytes: 4096        # how much of each file the content pass reads
+
+tier_quota_bytes: {}     # e.g. {1: 50000000000} to flag tier 1 over 50 GB in `audit`

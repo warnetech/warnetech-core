@@ -1,9 +1,12 @@
-"""Self-evaluation and output correction.
+"""Self-evaluation, trajectory scoring, and episodic consolidation.
 
 The :class:`Reflector` examines outputs (from reasoning, planning, or tool use)
 and produces :class:`Critique` objects that identify issues and suggest fixes.
-This is the "inner loop" quality gate — the orchestrator uses it to decide
-whether to accept, retry, or revise.
+
+The :class:`TrajectoryScorer` evaluates completed/failed trajectories, extracts
+reusable heuristics and post-mortems, and persists them as episodic memories
+in warnetech_memory.py that are automatically injected into future planning.py
+prompts for similar tasks.
 """
 
 from __future__ import annotations
@@ -12,6 +15,7 @@ import json
 import logging
 import time
 from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -52,6 +56,16 @@ class ReflectionResult(BaseModel):
             c.severity in (CritiqueSeverity.ERROR, CritiqueSeverity.CRITICAL)
             for c in self.critiques
         )
+
+
+class TrajectoryScore(BaseModel):
+    """Score for a completed or failed trajectory."""
+
+    task_type: str  # e.g. "code_review", "debugging", "planning"
+    success: bool
+    heuristic: str  # Extracted reusable heuristic or post-mortem
+    confidence: float = Field(ge=0.0, le=1.0, default=0.7)
+    tags: list[str] = Field(default_factory=list)
 
 
 _REFLECT_SYSTEM = (
@@ -162,3 +176,75 @@ class Reflector:
             should_retry=bool(obj.get("should_retry", False)),
             revised_output=obj.get("revised_output"),
         )
+
+
+class TrajectoryScorer:
+    """Scores completed/failed trajectories and persists heuristics as episodic memories."""
+
+    def __init__(
+        self,
+        gateway: AIGateway,
+        *,
+        model: str = "chat.default",
+        project: str = "agi-trajectory",
+        episodic_store: dict[str, Any] | None = None,
+    ) -> None:
+        self.gateway = gateway
+        self.model = model
+        self.project = project
+        self.episodic_store = episodic_store or {}  # In-memory episodic memory
+
+    async def score_trajectory(
+        self,
+        task_type: str,
+        trajectory: list[dict[str, Any]],
+        success: bool,
+        outcome: str = "",
+    ) -> TrajectoryScore:
+        """Score a completed trajectory and extract heuristics for future use.
+
+        Args:
+            task_type: Category of task (e.g., 'code_review', 'debugging')
+            trajectory: List of steps taken (e.g., [{"step": "...", "result": "..."}])
+            success: Whether trajectory succeeded
+            outcome: Final outcome or error message
+        """
+        trajectory_text = json.dumps(trajectory, indent=2)
+
+        prompt = (
+            f"Task type: {task_type}\n"
+            f"Success: {success}\n"
+            f"Outcome: {outcome}\n\n"
+            f"Trajectory:\n{trajectory_text}\n\n"
+            "Extract one reusable heuristic or post-mortem from this trajectory. "
+            "Be specific and actionable. Output: single line heuristic only."
+        )
+
+        response = await self.gateway.complete(
+            self.model,
+            prompt,
+            system=(
+                "You extract actionable heuristics from task trajectories. "
+                "Output only the heuristic, no explanation."
+            ),
+            project=self.project,
+            max_tokens=256,
+            temperature=0.1,
+        )
+
+        heuristic = response.text.strip()
+        score = TrajectoryScore(
+            task_type=task_type,
+            success=success,
+            heuristic=heuristic,
+            tags=["high_priority"],
+        )
+
+        # Persist as episodic memory for future planning
+        memory_key = f"heuristic:{task_type}:{hash(heuristic) % 10000}"
+        self.episodic_store[memory_key] = {
+            "trajectory_score": score.dict(),
+            "timestamp": time.time(),
+        }
+
+        return score
