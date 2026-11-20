@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# warnetech-llm — unified entry point for the warnetech-core LLM platform.
+#
+# Launcher that initializes the environment and starts the warnetech daemon
+# with LLM capabilities. Handles both Termux/proot and native Linux.
+#
+# Usage:
+#     warnetech-llm              # start daemon with default config
+#     warnetech-llm --help       # show available options
+#
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+log() {
+  echo "==> $*" >&2
+}
+
+error() {
+  echo "error: $*" >&2
+  return 1
+}
+
+# Parse arguments
+show_help=0
+for arg in "$@"; do
+  case "$arg" in
+    -h|--help) show_help=1 ;;
+    *) error "unknown option: $arg"; exit 2 ;;
+  esac
+done
+
+if [ "$show_help" -eq 1 ]; then
+  cat >&2 <<'EOF'
+warnetech-llm — unified entry point for warnetech-core
+
+Usage:
+    warnetech-llm              start the daemon with defaults
+    warnetech-llm --help       show this message
+
+Environment:
+    WARNETECH_VENV             virtualenv path (default: ~/.venvs/warnetech)
+    WARNETECH_OFFLINE          run in offline mode (echo provider)
+
+The launcher:
+  1. Initializes the environment (init --non-interactive)
+  2. Starts the daemon (daemon start)
+  3. Checks health (doctor)
+
+For detailed setup, see:
+    bash scripts/proot_debian_setup.sh
+EOF
+  exit 0
+fi
+
+log "Starting warnetech-core LLM platform"
+
+# Step 1: Initialize environment
+log "Initializing environment..."
+"${REPO_ROOT}/warnetech.sh" init --non-interactive || error "init failed"
+
+# Step 2: Start daemon
+log "Starting daemon..."
+"${REPO_ROOT}/warnetech.sh" daemon start &
+DAEMON_PID=$!
+
+# Give daemon a moment to start
+sleep 2
+
+# Step 3: Health check
+log "Checking health..."
+if "${REPO_ROOT}/warnetech.sh" daemon status | grep -q running; then
+  log "✓ Daemon is running"
+  log "Platform ready. Run 'warnetech chat' to start."
+
+  # Keep process alive so daemon stays running
+  wait $DAEMON_PID 2>/dev/null || true
+else
+  error "Daemon failed to start"
+  exit 1
+fi
