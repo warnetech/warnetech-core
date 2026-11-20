@@ -31,7 +31,9 @@ def _manager(tmp_path: Path, name: str = "warnetech-test") -> DaemonManager:
     )
 
 
-def _spawn_daemon(pid_file: Path, log_dir: Path, ticks: int = 200) -> subprocess.Popen:
+def _spawn_daemon(
+    pid_file: Path, log_dir: Path, ticks: int = 200, self_stop: bool = False
+) -> subprocess.Popen:
     """Launch a real daemon in a child process that writes its PID and ticks."""
     script = textwrap.dedent(
         f"""
@@ -42,8 +44,11 @@ def _spawn_daemon(pid_file: Path, log_dir: Path, ticks: int = 200) -> subprocess
         async def main():
             d = DaemonManager("child", Path({str(pid_file)!r}), Path({str(log_dir)!r}))
             async with d:
-                for _ in range({ticks}):
-                    await asyncio.sleep(0.05)
+                if {self_stop}:
+                    await asyncio.sleep({ticks} * 0.05)
+                    await d.shutdown()
+                else:
+                    await d.wait_until_stopped()
             print("clean-exit", flush=True)
 
         asyncio.run(main())
@@ -87,24 +92,25 @@ class TestStartupAndPidFile:
             await mgr.shutdown()
 
     @pytest.mark.asyncio
-    async def test_startup_is_idempotent_within_same_manager(self, tmp_path: Path) -> None:
+    async def test_second_startup_on_same_manager_raises(self, tmp_path: Path) -> None:
         mgr = _manager(tmp_path)
         await mgr.startup()
         try:
-            await mgr.startup()  # second call must not raise or rewrite the PID
+            with pytest.raises(RuntimeError, match="already running"):
+                await mgr.startup()
             assert mgr.pid_file.read_text().strip() == str(os.getpid())
         finally:
             await mgr.shutdown()
 
     @pytest.mark.asyncio
     async def test_live_pid_blocks_second_daemon(self, tmp_path: Path) -> None:
-        pid_file = tmp_path / "daemon.pid"
-        pid_file.write_text(f"{os.getpid()}\n")  # this process is alive
         mgr = _manager(tmp_path)
+        mgr.pid_file.parent.mkdir(parents=True, exist_ok=True)
+        mgr.pid_file.write_text(f"{os.getpid()}\n")  # this process is alive
         with pytest.raises(RuntimeError, match="already running"):
             await mgr.startup()
         # The live PID file must be left untouched.
-        assert pid_file.read_text().strip() == str(os.getpid())
+        assert mgr.pid_file.read_text().strip() == str(os.getpid())
 
     @pytest.mark.asyncio
     async def test_stale_pid_is_replaced(self, tmp_path: Path) -> None:
@@ -223,7 +229,7 @@ class TestSignalDrivenLifecycle:
 
     def test_natural_exit_removes_pid_file(self, tmp_path: Path) -> None:
         pid_file = tmp_path / "run" / "child.pid"
-        proc = _spawn_daemon(pid_file, tmp_path / "logs", ticks=5)
+        proc = _spawn_daemon(pid_file, tmp_path / "logs", ticks=5, self_stop=True)
         out, err = proc.communicate(timeout=15)
         assert proc.returncode == 0, err
         assert "clean-exit" in out

@@ -91,8 +91,7 @@ class DaemonManager:
             RuntimeError: If daemon is already running (PID file exists and process alive)
         """
         if self._running:
-            self.logger.warning("%s already running", self.name)
-            return
+            raise RuntimeError(f"{self.name} already running in this process")
 
         # Check for existing process
         if self.pid_file.exists():
@@ -134,13 +133,19 @@ class DaemonManager:
 
         self.logger.info("%s shutting down", self.name)
 
-        # Cancel pending tasks
-        pending = asyncio.all_tasks()
-        for task in pending:
-            if task is not asyncio.current_task():
-                task.cancel()
+        # Remove signal handlers installed in startup() so they don't leak
+        # into the host process (e.g. a test runner).
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            try:
+                loop.remove_signal_handler(sig)
+            except (NotImplementedError, RuntimeError):
+                pass
 
-        # Wait for cancellation
+        # Cancel only tasks this daemon manages, never the host's tasks.
+        pending = [t for t in self._tasks if not t.done()]
+        for task in pending:
+            task.cancel()
         if pending:
             await asyncio.gather(*pending, return_exceptions=True)
 
