@@ -1,6 +1,6 @@
-"""MCP tool definitions and dispatch for warnetech-core.
+"""MCP tool definitions and dispatch for warnetech_core.
 
-Each tool wraps a warnetech-core capability: gateway completions, embeddings,
+Each tool wraps a warnetech_core capability: gateway completions, embeddings,
 memory/RAG, usage accounting, model listing, and the AGI orchestrator.
 
 All tools are async and build the gateway/memory lazily on first call so the

@@ -16,6 +16,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from ..gateway import AIGateway
+from ._coerce import unit_interval
 
 log = logging.getLogger("warnetech.agi.reasoning")
 
@@ -156,18 +157,24 @@ class ReasoningEngine:
                 if not conclusion:
                     conclusion = line
                 continue
+            if not isinstance(obj, dict):
+                # A bare number or string is not a step or a conclusion.
+                continue
 
             if "conclusion" in obj:
-                conclusion = obj["conclusion"]
+                conclusion = str(obj["conclusion"] or "")
             elif "step" in obj or "thought" in obj:
                 if len(steps) >= max_steps:
                     continue
                 step_started = time.perf_counter()
+                index = obj.get("step")
+                if not isinstance(index, int) or isinstance(index, bool):
+                    index = len(steps) + 1
                 steps.append(
                     ThoughtStep(
-                        index=obj.get("step", len(steps) + 1),
-                        content=obj.get("thought", ""),
-                        confidence=float(obj.get("confidence", 0.5)),
+                        index=index,
+                        content=str(obj.get("thought") or ""),
+                        confidence=unit_interval(obj.get("confidence")),
                         strategy=strategy,
                         elapsed_ms=(time.perf_counter() - step_started) * 1000,
                     )

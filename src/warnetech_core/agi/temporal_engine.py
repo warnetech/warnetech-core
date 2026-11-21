@@ -1,19 +1,29 @@
 """Time-aware goal management, memory consolidation, and autonomous wake-up cycles.
 
-The :class:`TemporalEngine` manages goal deadlines, coordinates periodic memory
-consolidation sweeps, and fires proactive autonomous wake-up cycles wired into
-the daemon/automation scheduler for continuous self-improvement.
+The :class:`TemporalEngine` carries one shared state dict across steps. Each
+:meth:`TemporalEngine.step` merges the input into the state, then runs the
+registered hooks in order. A hook may return the new state, or return ``None``
+after changing the dict in place. Hooks may be sync or async.
+
+On top of that, the engine tracks goal deadlines, runs periodic memory
+consolidation sweeps, and schedules autonomous wake-up loops for the
+daemon/automation scheduler.
 """
 
+from __future__ import annotations
+
 import asyncio
+import inspect
 import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("TemporalEngine")
+log = logging.getLogger("warnetech.agi.temporal_engine")
+logger = log  # kept for existing callers that import ``logger``
+
+Hook = Callable[[dict[str, Any]], Any]
 
 
 @dataclass
@@ -31,16 +41,23 @@ class GoalDeadline:
 
 
 class TemporalEngine:
-    """Manages goals with deadlines, memory consolidation, and autonomous wake-ups."""
+    """Carry state across steps, run hooks, and track goal deadlines.
 
-    def __init__(self, state: dict[str, Any] | None = None):
-        self.state = state or {}
-        self.registry: list[Callable[..., Any]] = []
+    Example::
+
+        engine = TemporalEngine()
+        engine.register_hook(lambda s: {**s, "count": s.get("count", 0) + 1})
+        state = await engine.step({"task": "start"})
+    """
+
+    def __init__(self, state: dict[str, Any] | None = None) -> None:
+        self.state: dict[str, Any] = dict(state or {})
+        self.registry: list[Hook] = []
         self.goals: dict[str, GoalDeadline] = {}
         self.consolidation_interval = 3600.0  # 1 hour
         self.last_consolidation = time.time()
 
-    def register_hook(self, func: Callable[..., Any]) -> None:
+    def register_hook(self, func: Hook) -> None:
         """Register a hook to execute during steps."""
         self.registry.append(func)
 
@@ -61,27 +78,32 @@ class TemporalEngine:
             tags=tags or [],
         )
         self.goals[goal_id] = goal
-        logger.info(f"Goal added: {goal_id} due at {goal.deadline}")
+        log.info("Goal added: %s due at %s", goal_id, goal.deadline)
         return goal
 
     async def step(self, input_payload: dict[str, Any]) -> dict[str, Any]:
-        """Execute temporal step and check for consolidation/wake-up cycles."""
-        logger.info(f"Executing temporal step with payload keys: {list(input_payload.keys())}")
+        """Merge *input_payload*, run every hook once in order, then housekeeping."""
+        log.debug("temporal step with payload keys %s", list(input_payload))
         self.state.update(input_payload)
 
         for hook in self.registry:
-            if asyncio.iscoroutinefunction(hook):
-                self.state = await hook(self.state)
-            else:
-                self.state = hook(self.state)
+            result = hook(self.state)
+            if inspect.isawaitable(result):
+                result = await result
+            if result is None:
+                continue  # the hook changed the dict in place
+            if not isinstance(result, dict):
+                name = getattr(hook, "__name__", repr(hook))
+                raise TypeError(
+                    f"hook {name!r} must return a dict or None, not {type(result).__name__}"
+                )
+            self.state = result
 
-        # Check for overdue goals
-        overdue = [g for g in self.goals.values() if g.is_overdue()]
+        overdue = [g.goal_id for g in self.goals.values() if g.is_overdue()]
         if overdue:
-            self.state["overdue_goals"] = [g.goal_id for g in overdue]
-            logger.warning(f"Overdue goals: {[g.goal_id for g in overdue]}")
+            self.state["overdue_goals"] = overdue
+            log.warning("Overdue goals: %s", overdue)
 
-        # Trigger memory consolidation if interval elapsed
         if time.time() - self.last_consolidation > self.consolidation_interval:
             await self._consolidate_memory()
 
@@ -89,7 +111,7 @@ class TemporalEngine:
 
     async def _consolidate_memory(self) -> None:
         """Periodic sweep to consolidate episodic memories and extract heuristics."""
-        logger.info("Starting memory consolidation sweep")
+        log.info("Starting memory consolidation sweep")
         self.last_consolidation = time.time()
         self.state["last_consolidation"] = self.last_consolidation
         # Memory consolidation happens via reflection.TrajectoryScorer
@@ -101,34 +123,17 @@ class TemporalEngine:
         interval_seconds: float,
         callback: Callable[..., Any],
     ) -> asyncio.Task[None]:
-        """Schedule proactive autonomous wake-up cycle."""
+        """Schedule a proactive autonomous wake-up loop."""
 
-        async def wakeup_loop():
+        async def wakeup_loop() -> None:
             while True:
                 await asyncio.sleep(interval_seconds)
-                logger.info(f"Autonomous wakeup: {wakeup_id}")
-                if asyncio.iscoroutinefunction(callback):
-                    await callback(self.state)
-                else:
-                    callback(self.state)
+                log.info("Autonomous wakeup: %s", wakeup_id)
+                result = callback(self.state)
+                if inspect.isawaitable(result):
+                    await result
 
         task = asyncio.create_task(wakeup_loop())
         self.state.setdefault("wakeup_tasks", []).append(wakeup_id)
-        logger.info(f"Scheduled autonomous wakeup: {wakeup_id} every {interval_seconds}s")
+        log.info("Scheduled autonomous wakeup: %s every %ss", wakeup_id, interval_seconds)
         return task
-
-
-if __name__ == "__main__":
-
-    async def sample_hook(state: dict[str, Any]) -> dict[str, Any]:
-        state["counter"] = state.get("counter", 0) + 1
-        return state
-
-    engine = TemporalEngine()
-    engine.register_hook(sample_hook)
-
-    async def main():
-        res = await engine.step({"task": "initialize"})
-        print("Engine state output:", res)
-
-    asyncio.run(main())

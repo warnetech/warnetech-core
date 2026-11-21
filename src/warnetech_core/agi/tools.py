@@ -27,6 +27,11 @@ class ToolDefinition(BaseModel):
     parameters: dict[str, Any] = Field(default_factory=dict)
     required_params: list[str] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
+    version: str = "1.0.0"
+    dependencies: list[str] = Field(default_factory=list)
+    # Explicit owner-declared substitution group. None means no alternatives.
+    # Tags are never used for substitution.
+    selection_group: str | None = None
 
     def format_for_llm(self) -> dict[str, Any]:
         """Return the schema in the format expected by tool-use prompts."""
@@ -57,6 +62,8 @@ class ToolResult(BaseModel):
     success: bool = True
     output: Any = None
     error: str | None = None
+    # Exception class name only (never the message). Set when a handler raises.
+    error_type: str | None = None
     elapsed_ms: float = 0.0
 
 
@@ -136,6 +143,7 @@ class ToolRegistry:
                 call_id=call.call_id,
                 success=False,
                 error=f"{type(exc).__name__}: {exc}",
+                error_type=type(exc).__name__,
                 elapsed_ms=elapsed,
             )
 

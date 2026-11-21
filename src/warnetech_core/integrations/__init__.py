@@ -1,4 +1,4 @@
-"""Adapters that plug warnetech-core into existing Warnetech components."""
+"""Adapters that plug warnetech_core into existing Warnetech components."""
 
 from .ai_controller import make_embed_fn
 

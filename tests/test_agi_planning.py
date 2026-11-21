@@ -13,6 +13,22 @@ from warnetech_core.agi.planning import (
 )
 
 
+class TestGoal:
+    def test_id_is_generated_when_omitted(self):
+        goal = Goal(description="Analyse operational telemetry")
+        assert isinstance(goal.id, str)
+        assert len(goal.id) == 32
+
+    def test_same_description_gets_distinct_ids(self):
+        first = Goal(description="Evaluate service health")
+        second = Goal(description="Evaluate service health")
+        assert first.id != second.id
+
+    def test_explicit_id_is_kept(self):
+        goal = Goal(id="goal-123", description="Summarise system findings")
+        assert goal.id == "goal-123"
+
+
 class TestTaskNode:
     def test_defaults(self):
         t = TaskNode(title="do thing")
@@ -103,3 +119,17 @@ class TestPlanner:
         tasks = planner._parse_tasks(raw)
         assert len(tasks) == 1
         assert tasks[0].title == "X"
+
+    def test_duplicate_title_dependency_waits_for_every_match(self):
+        planner = Planner.__new__(Planner)
+        raw = json.dumps(
+            [
+                {"title": "Fetch", "description": "source one", "depends_on": []},
+                {"title": "Fetch", "description": "source two", "depends_on": []},
+                {"title": "Report", "description": "combine", "depends_on": ["Fetch"]},
+            ]
+        )
+        tasks = planner._parse_tasks(raw)
+        fetch_ids = [t.id for t in tasks if t.title == "Fetch"]
+        report = next(t for t in tasks if t.title == "Report")
+        assert report.depends_on == fetch_ids

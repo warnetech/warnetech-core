@@ -1,6 +1,6 @@
 """Alignment with the existing Warnetech system (claude-command-cli).
 
-These cover the pieces added specifically to fit warnetech-core into the
+These cover the pieces added specifically to fit warnetech_core into the
 canonical architecture: the NVIDIA/Nemotron provider the firewall already
 uses, the shared-Supabase store, and the embedding-model isolation that a
 shared vector table needs.

@@ -1,4 +1,4 @@
-"""End-to-end tour of warnetech-core. Runs offline — no API keys required.
+"""End-to-end tour of warnetech_core. Runs offline — no API keys required.
 
     python examples/quickstart.py
 """

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""warnetech-core engine bootstrap.
+"""warnetech_core engine bootstrap.
 
 Standalone entry point for the AGI orchestrator, invoked via ``warnetech.sh``.
 Loads environment, builds the gateway and memory service, then dispatches

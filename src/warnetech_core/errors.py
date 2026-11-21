@@ -8,7 +8,7 @@ from __future__ import annotations
 
 
 class WarnetechError(Exception):
-    """Base class for every error raised by warnetech-core."""
+    """Base class for every error raised by warnetech_core."""
 
 
 class ConfigError(WarnetechError):

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import time
 import uuid
 from enum import Enum
@@ -17,6 +18,8 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from ..gateway import AIGateway
+from ._coerce import strip_code_fence
+from .verification import TaskVerificationContract, parse_verification
 
 log = logging.getLogger("warnetech.agi.planning")
 
@@ -41,6 +44,7 @@ class TaskNode(BaseModel):
     estimated_seconds: float | None = None
     result: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+    verification: TaskVerificationContract | None = None
 
     @property
     def is_ready(self) -> bool:
@@ -58,6 +62,7 @@ class TaskNode(BaseModel):
 class Goal(BaseModel):
     """A high-level objective to be decomposed into tasks."""
 
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex)
     description: str
     success_criteria: list[str] = Field(default_factory=list)
     constraints: list[str] = Field(default_factory=list)
@@ -165,10 +170,7 @@ class Planner:
 
     def _parse_tasks(self, text: str) -> list[TaskNode]:
         """Parse the LLM's JSON array into TaskNode objects."""
-        text = text.strip()
-        if text.startswith("```"):
-            lines = text.splitlines()
-            text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+        text = strip_code_fence(text)
 
         try:
             raw_tasks = json.loads(text)
@@ -180,25 +182,48 @@ class Planner:
             log.error("planner output is not a list: %s", type(raw_tasks))
             return []
 
+        # Keep only object entries, so the nodes and their raw dicts stay index-aligned.
+        entries = [raw for raw in raw_tasks if isinstance(raw, dict)]
         nodes: list[TaskNode] = []
-        title_to_id: dict[str, str] = {}
+        # A title can repeat. A dependency on it waits for every task with that title,
+        # so it never runs before one of its inputs.
+        title_to_ids: dict[str, list[str]] = {}
 
-        for raw in raw_tasks:
-            if not isinstance(raw, dict):
-                continue
+        for raw in entries:
+            title = str(raw.get("title") or "untitled")
             node = TaskNode(
-                title=raw.get("title", "untitled"),
-                description=raw.get("description", ""),
-                tool_hint=raw.get("tool_hint"),
-                estimated_seconds=raw.get("estimated_seconds"),
+                title=title,
+                description=str(raw.get("description") or ""),
+                tool_hint=raw["tool_hint"] if isinstance(raw.get("tool_hint"), str) else None,
+                estimated_seconds=_seconds(raw.get("estimated_seconds")),
+                # Malformed explicit contracts raise ValueError (PB-7A D10).
+                verification=parse_verification(raw.get("verification"), title),
             )
-            title_to_id[node.title] = node.id
+            title_to_ids.setdefault(node.title, []).append(node.id)
             nodes.append(node)
 
-        for raw, node in zip(raw_tasks, nodes, strict=True):
-            if not isinstance(raw, dict):
+        for raw, node in zip(entries, nodes, strict=True):
+            deps = raw.get("depends_on")
+            if not isinstance(deps, list):
                 continue
-            deps = raw.get("depends_on", [])
-            node.depends_on = [title_to_id[d] for d in deps if d in title_to_id]
+            resolved: list[str] = []
+            for dep_title in deps:
+                if not isinstance(dep_title, str):
+                    continue
+                for dep_id in title_to_ids.get(dep_title, []):
+                    if dep_id not in resolved:
+                        resolved.append(dep_id)
+            node.depends_on = resolved
 
         return nodes
+
+
+def _seconds(value: Any) -> float | None:
+    """A non-negative duration, or None when the planner gave something unusable."""
+    if isinstance(value, bool):
+        return None
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError):
+        return None
+    return seconds if seconds >= 0 and math.isfinite(seconds) else None

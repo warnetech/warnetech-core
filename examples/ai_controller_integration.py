@@ -1,4 +1,4 @@
-"""Plugging warnetech-core into warnetech_ai_controller.
+"""Plugging warnetech_core into warnetech_ai_controller.
 
 Runs offline — no API keys, and no dependency on claude-command-cli being
 importable: the two AI-controller functions it touches are reproduced here

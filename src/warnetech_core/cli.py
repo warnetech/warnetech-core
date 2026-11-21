@@ -256,7 +256,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--no-save", action="store_true", help="do not remember this conversation")
     p.set_defaults(func=cmd_chat)
 
-    p = sub.add_parser("doctor", help="check whether this environment can run warnetech-core")
+    p = sub.add_parser("doctor", help="check whether this environment can run warnetech_core")
     p.add_argument("--json", action="store_true", help="machine-readable output")
     p.add_argument("--network", action="store_true", help="also ask the configured Ollama hosts")
     p.set_defaults(func=cmd_doctor)
@@ -298,6 +298,10 @@ def main(argv: list[str] | None = None) -> int:
 
     memory_group.mount(sub)
 
+    from .agi_commands import group as agi_group
+
+    agi_group.mount(sub)
+
     args = parser.parse_args(argv)
     if getattr(args, "command", None) == "daemon":
         return daemon_group.dispatch(args)
@@ -315,6 +319,8 @@ def main(argv: list[str] | None = None) -> int:
         return route_group.dispatch(args)
     if getattr(args, "command", None) == "memory":
         return memory_group.dispatch(args)
+    if getattr(args, "command", None) == "agi":
+        return agi_group.dispatch(args)
     return int(args.func(args))
 
 

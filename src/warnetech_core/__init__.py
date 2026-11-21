@@ -1,4 +1,4 @@
-"""warnetech-core — shared AI gateway and memory/context layer.
+"""warnetech_core — shared AI gateway and memory/context layer.
 
 Two things, so that no Warnetech project has to build either again:
 
